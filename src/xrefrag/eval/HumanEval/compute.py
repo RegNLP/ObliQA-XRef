@@ -4,7 +4,8 @@ HumanEval: Create combined dataset CSV for human evaluation.
 Combines all splits (train/test/dev) into one CSV with full metadata.
 Columns: qa_id, question, expected_answer, source_text, target_text, method, split,
          persona, source_passage_pid, target_passage_pid,
-         source_doc_id, target_doc_id, source_passage_id, target_passage_id
+         source_doc_id, target_doc_id, source_passage_id, target_passage_id,
+         reference_text, reference_type
 """
 
 from __future__ import annotations
@@ -34,7 +35,54 @@ def load_items(items_file: Path) -> dict[str, dict[str, Any]]:
     return items
 
 
-# (Removed) reference_type logic
+def load_crossrefs(crossref_file: Path) -> dict[tuple[str, str], dict[str, Any]]:
+    """Load cross-reference mappings.
+
+    Index by both hashed IDs (SourceID, TargetID) and passage UIDs (SourcePassageID, TargetPassageID).
+    Returns a dict keyed by (src, tgt) with values containing ReferenceText/ReferenceType.
+    """
+    crossrefs: dict[tuple[str, str], dict[str, Any]] = {}
+    try:
+        with open(crossref_file, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            if not reader.fieldnames:
+                return crossrefs
+            # Normalize field names for safety
+            field_map = {name.lower(): name for name in reader.fieldnames}
+            src_uid_key = field_map.get("sourcepassageid", "SourcePassageID")
+            tgt_uid_key = field_map.get("targetpassageid", "TargetPassageID")
+            src_id_key = field_map.get("sourceid", "SourceID")
+            tgt_id_key = field_map.get("targetid", "TargetID")
+            txt_key = field_map.get("referencetext", "ReferenceText")
+            typ_key = field_map.get("referencetype", "ReferenceType")
+
+            for row in reader:
+                s_uid = row.get(src_uid_key, "")
+                t_uid = row.get(tgt_uid_key, "")
+                s_hex = row.get(src_id_key, "")
+                t_hex = row.get(tgt_id_key, "")
+
+                value = {
+                    "ReferenceText": row.get(txt_key, ""),
+                    "ReferenceType": row.get(typ_key, ""),
+                    "_row": row,
+                }
+
+                # Index by passage UID pair if available
+                if s_uid and t_uid:
+                    key_uid = (s_uid, t_uid)
+                    if key_uid not in crossrefs:
+                        crossrefs[key_uid] = value
+                # Also index by hashed passage ID pair if available
+                if s_hex and t_hex:
+                    key_hex = (s_hex, t_hex)
+                    if key_hex not in crossrefs:
+                        crossrefs[key_hex] = value
+    except FileNotFoundError:
+        logger.warning(f"Crossref file not found: {crossref_file}")
+    except Exception as e:
+        logger.warning(f"Failed to load crossrefs from {crossref_file}: {e}")
+    return crossrefs
 
 
 def load_passages(passage_file: Path) -> dict[str, dict[str, Any]]:
@@ -68,7 +116,6 @@ def create_human_eval_combined(
 ) -> None:
     """
     Create combined human evaluation CSV from all splits (train/test/dev).
-
     Args:
         corpus: 'ukfin' or 'adgm'
         sample_size: if specified, randomly sample this many items per split
@@ -80,12 +127,12 @@ def create_human_eval_combined(
 
     if corpus.lower() == "ukfin":
         items_file = Path("runs/generate_ukfin/out/generator/items.jsonl")
-        # crossref_file = Path("runs/adapter_ukfin/processed/crossref_resolved.cleaned.csv")
+        crossref_file = Path("runs/adapter_ukfin/processed/crossref_resolved.cleaned.csv")
         passage_file = Path("runs/adapter_ukfin/processed/passage_corpus.jsonl")
         split_dir = Path("XRefRAG_Out_Datasets/XRefRAG-UKFIN-ALL")
     elif corpus.lower() == "adgm":
         items_file = Path("runs/generate_adgm/out/generator/items.jsonl")
-        # crossref_file = Path("runs/adapter_adgm/processed/crossref_resolved.cleaned.csv")
+        crossref_file = Path("runs/adapter_adgm/processed/crossref_resolved.cleaned.csv")
         passage_file = Path("data/adgm/processed/passage_corpus.jsonl")
         split_dir = Path("XRefRAG_Out_Datasets/XRefRAG-ADGM-ALL")
     else:
@@ -102,10 +149,12 @@ def create_human_eval_combined(
     # Load data
     logger.info("\n[Step 1] Loading data...")
     items = load_items(items_file)
-    # crossrefs = load_crossrefs(crossref_file) (reference_type removed)
+    crossrefs = load_crossrefs(crossref_file)
     passages = load_passages(passage_file)
 
-    logger.info(f"  ✓ Loaded {len(items)} items, {len(passages)} passages")
+    logger.info(
+        f"  ✓ Loaded {len(items)} items, {len(passages)} passages, {len(crossrefs)} crossrefs"
+    )
 
     # Load all splits
     logger.info("\n[Step 2] Loading all splits...")
@@ -201,6 +250,27 @@ def create_human_eval_combined(
         if not source_text or not target_text:
             missing_passages += 1
 
+        # Crossref lookup for ReferenceText/ReferenceType (hashed IDs, then UID/pid fallback)
+        cref = crossrefs.get((source_passage_id, target_passage_id)) or {}
+        if not cref:
+            s_uid = source_passage.get("passage_uid") or source_passage.get("pid") or ""
+            t_uid = target_passage.get("passage_uid") or target_passage.get("pid") or ""
+            if s_uid and t_uid:
+                cref = crossrefs.get((s_uid, t_uid)) or {}
+        reference_text = cref.get("ReferenceText", "")
+        reference_type = cref.get("ReferenceType", "")
+
+        # Human-readable passage labels (needs reference_text computed first for UKFIN)
+        default_s_label = source_passage.get("passage_id", "")
+        default_t_label = target_passage.get("passage_id", "")
+        if corpus.lower() == "ukfin" and reference_text.strip():
+            # For UKFIN, ReferenceText (e.g., 11.1) refers to the cited target.
+            source_passage_label = default_s_label
+            target_passage_label = reference_text
+        else:
+            source_passage_label = default_s_label
+            target_passage_label = default_t_label
+
         csv_rows.append(
             {
                 "qa_id": item_id,
@@ -217,6 +287,13 @@ def create_human_eval_combined(
                 "target_doc_id": target_doc_id,
                 "source_passage_id": source_passage_id,
                 "target_passage_id": target_passage_id,
+                "source_passage_label": source_passage_label,
+                "target_passage_label": target_passage_label,
+                # Add both snake_case and display-case fields for convenience
+                "reference_text": reference_text,
+                "reference_type": reference_type,
+                "ReferenceText": reference_text,
+                "ReferenceType": reference_type,
             }
         )
 
@@ -246,6 +323,12 @@ def create_human_eval_combined(
         "target_doc_id",
         "source_passage_id",
         "target_passage_id",
+        "source_passage_label",
+        "target_passage_label",
+        "reference_text",
+        "reference_type",
+        "ReferenceText",
+        "ReferenceType",
     ]
 
     with open(csv_file, "w", newline="", encoding="utf-8") as f:

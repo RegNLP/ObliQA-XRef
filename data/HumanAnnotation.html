@@ -103,6 +103,14 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
 
+        /* Highlight for appended Reference Text line */
+        .ref-text {
+            color: #ffd166;
+            /* warm highlight */
+            display: block;
+            margin-top: 8px;
+        }
+
         .main {
             padding: 16px;
         }
@@ -296,14 +304,11 @@
             <div class="card"><strong>QUESTION</strong>
                 <pre id="q"></pre>
             </div>
-            <div class="card"><strong>SOURCE PASSAGE (S)</strong>
+            <div class="card"><strong>SOURCE PASSAGE</strong>
                 <pre id="s"></pre>
             </div>
-            <div class="card"><strong>TARGET PASSAGE (T)</strong>
+            <div class="card"><strong>TARGET PASSAGE</strong>
                 <pre id="t"></pre>
-            </div>
-            <div class="card"><strong>GOLD / EXPECTED ANSWER</strong>
-                <pre id="a"></pre>
             </div>
         </aside>
 
@@ -320,42 +325,34 @@
                 <section class="block">
                     <fieldset class="qgroup">
                         <legend>1) Question quality</legend>
-                        <div class="small" style="margin-bottom:6px">Is the question valid and well-formed?</div>
-                        <label class="opt"><input type="radio" name="q_quality" value="yes"> Yes — clear and
-                            understandable</label>
-                        <label class="opt"><input type="radio" name="q_quality" value="not_realistic"> No —
-                            not_realistic</label>
-                        <label class="opt"><input type="radio" name="q_quality" value="unclear_or_ungrammatical"> No —
-                            unclear_or_ungrammatical</label>
-                        <label class="opt"><input type="radio" name="q_quality" value="nonsensical"> No —
-                            nonsensical</label>
+                        <div class="small" style="margin-bottom:6px">Is the question understandable?</div>
+                        <label class="opt"><input type="radio" name="q_understandable" value="yes"> Yes</label>
+                        <label class="opt"><input type="radio" name="q_understandable" value="no"> No</label>
                     </fieldset>
                 </section>
 
                 <section class="block">
                     <fieldset class="qgroup">
-                        <legend>2) Dual-use (dependency of the question)</legend>
-                        <div class="small" style="margin-bottom:6px">Which text is needed to answer the question?</div>
-                        <label class="opt"><input type="radio" name="dual_use" value="both"> Both rules are required
-                            together</label>
-                        <label class="opt"><input type="radio" name="dual_use" value="s_only"> Source (S) alone is
-                            sufficient</label>
-                        <label class="opt"><input type="radio" name="dual_use" value="t_only"> Target (T) alone is
-                            sufficient</label>
-                        <label class="opt"><input type="radio" name="dual_use" value="neither_unclear"> Neither /
-                            Unclear</label>
+                        <legend>2) Passage relevance to the question</legend>
+                        <div class="small" style="margin-bottom:6px">Which passage(s) are related to the question?</div>
+                        <label class="opt"><input type="radio" name="passage_relevance" value="both"> both passages are
+                            related to the question</label>
+                        <label class="opt"><input type="radio" name="passage_relevance" value="s_only"> only source is
+                            related</label>
+                        <label class="opt"><input type="radio" name="passage_relevance" value="t_only"> only target is
+                            related</label>
+                        <label class="opt"><input type="radio" name="passage_relevance" value="neither_mismatch">
+                            neither is related / mismatch</label>
                     </fieldset>
                 </section>
 
                 <section class="block">
                     <fieldset class="qgroup">
-                        <legend>3) Answer grounding (faithfulness of the answer)</legend>
-                        <div class="small" style="margin-bottom:6px">Is the provided answer correct and complete (based
-                            only on S and T)?</div>
-                        <label class="opt"><input type="radio" name="ans_ground" value="yes"> Yes, sufficient — every
-                            claim is stated or clearly implied by S/T</label>
-                        <label class="opt"><input type="radio" name="ans_ground" value="no"> No — incorrect, incomplete,
-                            or unsupported</label>
+                        <legend>3) Explicit citation from Source → Target</legend>
+                        <div class="small" style="margin-bottom:6px">Does the source passage explicitly refer to the
+                            target passage?</div>
+                        <label class="opt"><input type="radio" name="explicit_citation" value="yes"> Yes</label>
+                        <label class="opt"><input type="radio" name="explicit_citation" value="no"> No</label>
                     </fieldset>
                 </section>
 
@@ -363,7 +360,7 @@
                     <div class="small" style="margin-bottom:6px"><strong>Optional comment</strong> (1–2 short clauses)
                     </div>
                     <textarea id="comment"
-                        placeholder="Optional: e.g., 'T not necessary' / 'answer adds unsupported detail'"></textarea>
+                        placeholder="Optional: e.g., 'only S related' / 'no explicit citation'"></textarea>
                 </section>
 
                 <div class="nav">
@@ -383,36 +380,36 @@
                 <button id="helpCloseTop" class="btn">Close</button>
             </header>
             <div class="content">
-                <p><strong>Goal:</strong> Validate benchmark <em>instance validity</em> for citation-dependent QA. You
-                    are <strong>not</strong> evaluating legal correctness. You are checking (i) whether the question
-                    truly requires dual-use of S and T, and (ii) whether the provided answer is supported by S∪T.</p>
-                <p><strong>Rule:</strong> Base all judgments <strong>only</strong> on S and T. Do not use outside
-                    knowledge.</p>
+                <p><strong>Goal:</strong> Audit dual-passage QA items for cross-reference relevance. Make all judgments
+                    using only the displayed passages.</p>
+                <p><strong>Scope:</strong> You will see a Question, a Source passage, and a Target passage. In some
+                    items, an ID or a short “Reference Text” may appear near a passage; treat these as hints only—decide
+                    based on the passages.</p>
 
                 <h3>1) Question quality</h3>
                 <ul>
-                    <li><strong>Yes</strong>: clear and understandable.</li>
-                    <li><strong>not_realistic</strong>: very unlikely a real user would ask this for these passages.
-                    </li>
-                    <li><strong>unclear_or_ungrammatical</strong>: confusing wording or broken grammar.</li>
-                    <li><strong>nonsensical</strong>: does not make sense even with S/T.</li>
+                    <li><strong>Yes</strong>: the question is clear and understandable.</li>
+                    <li><strong>No</strong>: wording is unclear, ambiguous, or ungrammatical.</li>
                 </ul>
 
-                <h3>2) Dual-use</h3>
+                <h3>2) Passage relevance to the question</h3>
                 <ul>
-                    <li><strong>Both</strong>: you must combine S and T to answer fully.</li>
-                    <li><strong>S only</strong> or <strong>T only</strong>: one passage is sufficient by itself.</li>
-                    <li><strong>Neither/Unclear</strong>: missing information or dependency is ambiguous.</li>
+                    <li><strong>both</strong>: both passages are needed or clearly related.</li>
+                    <li><strong>only source</strong>: only the Source passage is related.</li>
+                    <li><strong>only target</strong>: only the Target passage is related.</li>
+                    <li><strong>neither / mismatch</strong>: neither passage supports the question.</li>
                 </ul>
 
-                <h3>3) Answer grounding</h3>
+                <h3>3) Explicit citation from Source → Target</h3>
                 <ul>
-                    <li><strong>Yes</strong>: every claim is stated or clearly implied by S/T.</li>
-                    <li><strong>No</strong>: incorrect, incomplete, or includes unsupported content.</li>
+                    <li><strong>Yes</strong>: the Source explicitly refers to the Target (e.g., section/paragraph
+                        number, title/identifier, direct cross-reference).</li>
+                    <li><strong>No</strong>: no explicit reference; topical overlap or paraphrase does not count.</li>
                 </ul>
 
-                <p class="small">Tip: Keep comments brief (1–2 clauses). Example: “S alone sufficient”, “answer adds
-                    unsupported deadline”, “question unclear”.</p>
+                <p class="small"><strong>Rules:</strong> Do not use outside knowledge. Keep comments brief (1–2 short
+                    clauses), e.g., “only S related”, “no explicit citation”, “question unclear”. Use Save to download
+                    progress.</p>
             </div>
             <footer>
                 <button id="helpCloseBottom" class="btn">Close</button>
@@ -464,14 +461,14 @@
         let idx = 0;
         let currentFileKey = null;
 
-        const REQUIRED_COLS = ["qa_id", "question", "expected_answer", "source_text", "target_text"];
+        const REQUIRED_COLS = ["qa_id", "question", "source_text", "target_text"];
 
         // Annotation columns (written back into CSV)
         const ANN_COLS = [
-            "q_quality",     // yes/not_realistic/unclear_or_ungrammatical/nonsensical
-            "dual_use",      // both/s_only/t_only/neither_unclear
-            "ans_ground",    // yes/no
-            "comment"        // free text
+            "q_understandable",   // yes/no
+            "passage_relevance",  // both/s_only/t_only/neither_mismatch
+            "explicit_citation",  // yes/no
+            "comment"             // free text
         ];
 
         const els = {
@@ -490,7 +487,6 @@
             q: document.getElementById('q'),
             s: document.getElementById('s'),
             t: document.getElementById('t'),
-            a: document.getElementById('a'),
             meta: document.getElementById('meta'),
             counts: document.getElementById('counts'),
             bar: document.getElementById('bar'),
@@ -527,6 +523,48 @@
             if (changed) table[0] = header;
         }
 
+        function escHTML(s) {
+            return String(s ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+
+        // Migrate legacy annotation columns to new schema
+        function migrateLegacyColumns() {
+            // Ensure new columns exist in header mapping
+            mapHeader();
+
+            const hasLegacyQ = 'q_quality' in col;
+            const hasLegacyDual = 'dual_use' in col;
+            // explicit_citation is new; no legacy equivalent
+
+            for (let r = 1; r < table.length; r++) {
+                // 1) q_understandable from q_quality
+                const curUnderstandable = get(r, 'q_understandable');
+                if (!curUnderstandable && hasLegacyQ) {
+                    const v = (get(r, 'q_quality') || '').trim().toLowerCase();
+                    if (v) {
+                        const mapped = (v === 'yes') ? 'yes' : 'no';
+                        set(r, 'q_understandable', mapped);
+                    }
+                }
+
+                // 2) passage_relevance from dual_use
+                const curRel = get(r, 'passage_relevance');
+                if (!curRel && hasLegacyDual) {
+                    const v = (get(r, 'dual_use') || '').trim().toLowerCase();
+                    let mapped = '';
+                    if (v === 'both') mapped = 'both';
+                    else if (v === 's_only') mapped = 's_only';
+                    else if (v === 't_only') mapped = 't_only';
+                    else if (v === 'neither_unclear') mapped = 'neither_mismatch';
+                    if (mapped) set(r, 'passage_relevance', mapped);
+                }
+
+                // 3) explicit_citation has no legacy source — leave blank to force re-annotation
+            }
+        }
+
         function get(rowIdx, name) {
             const i = col[name];
             if (i == null) return '';
@@ -545,11 +583,14 @@
 
         function totalRows() { return Math.max(0, table.length - 1); }
 
+        function isLabeledRow(r) {
+            return !!(get(r, "q_understandable") && get(r, "passage_relevance") && get(r, "explicit_citation"));
+        }
+
         function doneCount() {
             let n = 0;
             for (let r = 1; r < table.length; r++) {
-                // count as done if at least answer grounding is filled (fast proxy)
-                if (get(r, "ans_ground")) n++;
+                if (isLabeledRow(r)) n++;
             }
             return n;
         }
@@ -567,7 +608,7 @@
 
         function show(iData) {
             if (table.length <= 1) {
-                els.q.textContent = els.s.textContent = els.t.textContent = els.a.textContent = '';
+                els.q.textContent = els.s.textContent = els.t.textContent = '';
                 els.meta.innerHTML = '<span>No assignment loaded</span>';
                 els.counts.textContent = '';
                 els.bar.style.width = '0%';
@@ -581,27 +622,53 @@
             savePosition();
 
             els.q.textContent = get(idx, "question") || '(empty)';
-            els.s.textContent = get(idx, "source_text") || '(empty)';
-            els.t.textContent = get(idx, "target_text") || '(empty)';
-            els.a.textContent = get(idx, "expected_answer") || '(empty)';
+            const sText = get(idx, "source_text") || '';
+            const tText = get(idx, "target_text") || '';
+            const refText = get(idx, "ReferenceText") || get(idx, "reference_text") || '';
+            const sPassageId = get(idx, "source_passage_label") || '';
+            const tPassageId = get(idx, "target_passage_label") || '';
+            const sourceDocId = get(idx, "source_doc_id") || '';
+            const targetDocId = get(idx, "target_doc_id") || '';
+            const isUKFIN = sourceDocId.includes('pra_rulebook__') || targetDocId.includes('pra_rulebook__');
+            if (sText) {
+                let sHTML = "";
+                if (!isUKFIN && sPassageId) sHTML += "<span class='ref-text'>Passage ID : " + escHTML(sPassageId) + "</span><br><br>";
+                sHTML += escHTML(sText);
+                if (!isUKFIN && refText) sHTML += "<br><br><span class='ref-text'>Reference Text : " + escHTML(refText) + "</span>";
+                els.s.innerHTML = sHTML;
+            } else {
+                els.s.textContent = '(empty)';
+            }
+            if (tText) {
+                let tHTML = "";
+                if (!isUKFIN && tPassageId) tHTML += "<span class='ref-text'>Passage ID : " + escHTML(tPassageId) + "</span><br><br>";
+                tHTML += escHTML(tText);
+                els.t.innerHTML = tHTML;
+            } else {
+                els.t.textContent = '(empty)';
+            }
+            // Expected answer intentionally hidden in UI
 
             const qa_id = get(idx, "qa_id");
             const extras = [];
-            for (const k of ["method", "split", "persona", "reference_type", "source_passage_pid", "target_passage_pid"]) {
+            for (const k of ["method", "split", "persona", "source_passage_pid", "target_passage_pid"]) {
                 if (k in col) {
                     const v = get(idx, k);
                     if (v) extras.push(`<span>${k}: ${v}</span>`);
                 }
             }
+            // Single reference_type badge (prefer ReferenceType, fallback to reference_type)
+            const refTypeVal = (col["ReferenceType"] != null ? get(idx, "ReferenceType") : '') || (col["reference_type"] != null ? get(idx, "reference_type") : '');
+            if (refTypeVal) extras.push(`<span>reference_type: ${refTypeVal}</span>`);
             els.meta.innerHTML = `<span>qa_id: ${qa_id || '(missing)'}</span><span>item ${idx} / ${N}</span>` + (extras.length ? extras.join('') : '');
 
             const done = doneCount();
             els.counts.textContent = `${done} labeled / ${N} total`;
             els.bar.style.width = ((done / Math.max(1, N)) * 100).toFixed(1) + '%';
 
-            setRadio('q_quality', get(idx, "q_quality"));
-            setRadio('dual_use', get(idx, "dual_use"));
-            setRadio('ans_ground', get(idx, "ans_ground"));
+            setRadio('q_understandable', get(idx, "q_understandable"));
+            setRadio('passage_relevance', get(idx, "passage_relevance"));
+            setRadio('explicit_citation', get(idx, "explicit_citation"));
             els.comment.value = get(idx, "comment");
 
             els.prev.disabled = els.prev2.disabled = (idx === 1);
@@ -610,9 +677,9 @@
 
         function collectAndSave() {
             if (table.length <= 1) return;
-            set(idx, "q_quality", getRadio('q_quality'));
-            set(idx, "dual_use", getRadio('dual_use'));
-            set(idx, "ans_ground", getRadio('ans_ground'));
+            set(idx, "q_understandable", getRadio('q_understandable'));
+            set(idx, "passage_relevance", getRadio('passage_relevance'));
+            set(idx, "explicit_citation", getRadio('explicit_citation'));
             set(idx, "comment", els.comment.value.trim());
 
             const csvText = csvStringify(table);
@@ -646,15 +713,15 @@
             table = csvParse(csvText);
             if (!table.length) { alert('Saved CSV is empty or invalid.'); return; }
 
-            try { mapHeader(); } catch { return; }
+            try { mapHeader(); migrateLegacyColumns(); } catch { return; }
 
             const posRaw = localStorage.getItem(localKeyPos(currentFileKey));
             const pos = posRaw != null ? parseInt(posRaw, 10) : NaN;
             if (!Number.isNaN(pos) && pos >= 1 && pos < table.length) show(pos);
             else {
-                // jump to first unlabeled item (by ans_ground)
+                // jump to first unlabeled item (by new rubric)
                 let first = 1;
-                for (let r = 1; r < table.length; r++) { if (!get(r, "ans_ground")) { first = r; break; } }
+                for (let r = 1; r < table.length; r++) { if (!isLabeledRow(r)) { first = r; break; } }
                 show(first);
             }
         }
@@ -671,13 +738,13 @@
             currentFileKey = f.name.replace(/\W+/g, '_');
             table = parsed;
 
-            try { mapHeader(); } catch { return; }
+            try { mapHeader(); migrateLegacyColumns(); } catch { return; }
 
             localStorage.setItem(localKeyCSV(currentFileKey), csvStringify(table));
             localStorage.setItem(LATEST_KEY, currentFileKey);
 
             let first = 1;
-            for (let r = 1; r < table.length; r++) { if (!get(r, "ans_ground")) { first = r; break; } }
+            for (let r = 1; r < table.length; r++) { if (!isLabeledRow(r)) { first = r; break; } }
             show(first);
         });
 
@@ -691,7 +758,7 @@
         document.getElementById('next2').addEventListener('click', () => { collectAndSave(); show(idx + 1); });
 
         // Live save
-        for (const n of ['q_quality', 'dual_use', 'ans_ground']) {
+        for (const n of ['q_understandable', 'passage_relevance', 'explicit_citation']) {
             document.querySelectorAll(`input[name="${n}"]`).forEach(el => el.addEventListener('change', collectAndSave));
         }
         document.getElementById('comment').addEventListener('change', collectAndSave);
