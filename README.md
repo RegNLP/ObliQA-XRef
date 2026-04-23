@@ -14,7 +14,7 @@ This tests genuine cross-document reasoning, not trivial single-passage answerab
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/RegNLP/XRefRag.git && cd XRefRag
+git clone https://github.com/RegNLP/ObliQA-XRef.git && cd XRefRag
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -35,7 +35,7 @@ python scripts/curate_stats.py
 
 ---
 
-## What is XRefRag?
+## What is ObliQA-XRef?
 
 A four-stage pipeline that transforms regulatory documents into high-quality, citation-dependent QA benchmarks:
 
@@ -366,11 +366,11 @@ See stage-specific documentation for detailed troubleshooting.
 
 **Citation**:
 ```bibtex
-@software{xrefrag2024,
-  title={XRefRag: Citation-Dependent QA Benchmark Construction},
+@software{ObliQAXRef2024,
+  title={ObliQA-XRef: Cross-Reference-Aware Benchmark for Citation-Dependent Regulatory Question Answering},
   author={RegNLP},
   year={2024},
-  url={https://github.com/RegNLP/XRefRag}
+  url={https://github.com/RegNLP/ObliQA-XRef}
 }
 ```
 
