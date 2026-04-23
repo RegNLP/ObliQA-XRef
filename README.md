@@ -1,6 +1,6 @@
-# XRefRag: Citation-Dependent QA Benchmark Construction
+# ObliQA-XRef: Citation-Dependent QA Benchmark Construction
 
-XRefRag is a production-grade framework for constructing **strictly citation-dependent** benchmarks for evaluating retrieval and RAG systems in citation-heavy regulatory and legislative corpora.
+ObliQA-XRef is a production-grade framework for constructing **strictly citation-dependent** benchmarks for evaluating retrieval and RAG systems in citation-heavy regulatory and legislative corpora.
 
 ## Core Innovation
 
