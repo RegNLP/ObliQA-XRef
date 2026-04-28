@@ -43,7 +43,7 @@ A four-stage pipeline that transforms regulatory documents into high-quality, ci
 |-------|-------|--------|--------|
 | **Adapter** | Raw docs (PDF/HTML) | Passages + cross-refs | Extraction + normalization |
 | **Generate** | Passages + citations | ~100-200 QA items | Schema + DPEL generation |
-| **Curate** | Generated items | ~80-150 final items | IR agreement + LLM judge |
+| **Curate** | Generated items | Final benchmark (all tiers) | Citation-dependency judge + answer validation |
 | **Evaluate** | Final benchmark | Quality metrics | Retriever evaluation |
 
 **Supported datasets**:
@@ -86,11 +86,15 @@ generate:
   method: both  # 'schema', 'dpel', or 'both'
   temperature: 0.2
   max_pairs: null  # null = all
+  # Citation-free prose policy (defaults — no inline rule/section IDs in Q/A)
+  no_citations: true
+  no_citations_in_question: true
+  citation_leakage_action: keep   # keep | filter | separate
+  dual_anchors_mode: always       # always | freeform_only | off
 
 curation:
   ir_agreement:
-    keep_threshold: 4
-    judge_threshold: 3
+    top_k: 100
   judge:
     temperature: 0.0
     num_judge_passes: 1
@@ -189,11 +193,16 @@ Generates diverse items via two methods:
 - Extracts structured fields (semantic hooks, citation hooks, item types, answer spans) from source→target pairs
 - Then generates Q&As using those anchors for controlled, citation-dependent items
 - Item types: Obligation, Permission, Definition, Scope, Procedure, Prohibition
+- Default: `no_citations=True`, `dual_anchors_mode="always"` — prose must not contain inline rule/section IDs; the model is required to draw factual claims from both passages
 
 **DPEL** — Direct pair-based generation
 - Generates Q&As directly from source→target passage pairs
 - Emphasizes natural citation dependency through joint evidence requirements
-- LLM-based generation with strict dual-evidence constraints
+- LLM-based generation with strict dual-evidence constraints and a STRICT NO-CITATIONS POLICY prompt rule
+
+**Citation leakage detection** runs post-generation on all items:
+- Flags items where rule/section identifiers appear in Q or A prose
+- Configurable via `citation_leakage_action`: `keep` (default, flag only), `filter` (drop), or `separate`
 
 **Key output**: `curated_items.generate.jsonl` (merged + deduplicated)
 
@@ -209,21 +218,24 @@ Multi-stage validation with increasing strictness:
 - RRF (fusion)
 - Cross-Encoder (reranking)
 
-**Voting** (aggregate agreement):
-- KEEP: 4/4 methods agree → Auto-accept
-- JUDGE: 3/4 methods agree → LLM validation
-- DROP: <3 methods agree → Auto-reject
+**IR Annotation** (diagnostic only — does not filter):
+- Counts how many retrievers co-retrieved source + target for each item
+- Assigns `ir_difficulty_label` ∈ {`easy`, `medium`, `hard`, `source_only`, `target_only`, `neither`}
+- All items proceed to the citation-dependency judge regardless of IR outcome
 
-**Judge** (LLM-based):
-- Validates JUDGE tier items only
-- Checks citation dependency (source insufficient? target adds material value?)
-- Confidence-scored verdicts
+**Citation-dependency judge (all items)**:
+- Validates every item for strict citation dependency
+- Checks: source alone insufficient? target adds material value?
+- Confidence-scored verdicts; ties → DROP
 
-**Answer Validation** (optional):
-- Secondary filter on KEEP + JUDGE-PASS items
+**Answer validation** (optional):
+- Secondary filter on citation-dependency PASS items
 - Skippable with `--skip-answer`
 
-**Final result**: ~80-85% of items pass all filters
+**Final benchmark assembly**:
+- Intersects judge PASS ∩ answer PASS
+- Exports `final_benchmark.jsonl/csv` (all validated items) and `final_hard.jsonl/csv` (challenging tier only)
+- Each item carries `ir_difficulty_label` and `difficulty_tier` (`retrievable` | `challenging`)
 
 **See**: [Curation Documentation](docs/curation/README.md)
 
@@ -308,7 +320,10 @@ ObliQA-XRef/
 │   ├── curate_*/                      # Curation outputs
 │   └── stats/                         # Statistics reports
 └── tests/
-    └── test_strict_citation_dependency.py
+    ├── test_citation_leakage.py           # detect_citation_leakage() — 62 tests
+    ├── test_citation_free_generation.py   # no_citations + dual_anchors_mode — 112 tests
+    ├── test_ir_difficulty_label.py        # IR difficulty label + vote computation — 28 tests
+    └── test_assemble_final_benchmark.py   # Final benchmark assembly — 23 tests
 ```
 
 ---

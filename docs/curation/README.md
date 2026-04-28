@@ -1,16 +1,18 @@
 # ObliQA-XRef Curation (Strict Citation-Dependent)
 
-Authoritative guide for the curation stage: inputs, steps, outputs, config, guardrails, and strict citation-dependency rules. Curation filters generator outputs with IR agreement, judges borderlines with an LLM, and (optionally) validates answers. Any item whose source passage alone answers the question must DROP with `QP_NOT_CIT_DEP`.
+Authoritative guide for the curation stage: inputs, steps, outputs, config, guardrails, and strict citation-dependency rules. Curation filters generator outputs with the LLM citation-dependency judge and answer validation. Any item whose source passage alone answers the question must DROP with `QP_NOT_CIT_DEP`.
 
 ## Overview
 
 ## Pipeline Overview
 
 1) **IR retrieval (optional from curation CLI)** — Build TREC runs per retriever (BM25, dense, RRF, cross-encoder rerank).
-2) **Voting** — Count how many IR runs retrieve the source passage ID and the target passage ID. Apply both-must-hold thresholds to assign KEEP / JUDGE / DROP.
-3) **Judge (borderline only)** — Multi-pass Azure/OpenAI LLM enforces strict citation-dependency. PASS requires `source_alone_insufficient=true`; ties DROP.
-4) **Answer validation (optional)** — Secondary filter over KEEP + judged-PASS items; can be skipped.
-5) **Reporting** — Decisions, stats, and judge artifacts written to the run directory.
+2) **IR annotation** — Compute per-item vote counts across all retrievers. Assign a diagnostic `ir_difficulty_label` to every item. **IR outcome does NOT filter items** — all items proceed to the citation-dependency judge regardless of retriever agreement.
+3) **Citation-dependency judge (all items)** — Multi-pass Azure/OpenAI LLM enforces strict citation-dependency. PASS requires `source_alone_insufficient=true`; ties DROP.
+4) **Answer validation (optional)** — Secondary filter over citation-dependency PASS items; can be skipped.
+5) **Final benchmark assembly** — Intersects judge PASS and answer PASS sets; enriches with difficulty metadata; writes `final_benchmark.jsonl/csv` and `final_hard.jsonl/csv`.
+
+> **Key design principle (Tasks 5 & 6):** IR agreement is a *diagnostic label only*. Hard-to-retrieve items that pass citation-dependency and answer validation are **retained** in the final benchmark with `difficulty_tier = "challenging"` rather than being dropped.
 
 ## Directory Structure & Inputs
 
@@ -34,37 +36,86 @@ Notes:
 
 ```
 <curate_output_dir>/
-  curated_items.keep.jsonl         # Direct IR KEEP (no judge)
-  curated_items.judge.jsonl        # Borderline items sent to judge
-  curated_items.drop.jsonl         # Direct IR DROP
-  curated_items.judged_keep.jsonl  # Judge-approved borderline
-  curated_items.judged_drop.jsonl  # Judge-rejected borderline
-  curated_items.final.jsonl        # KEEP ∪ judged_keep
-  decisions.jsonl                  # Vote audit per item
-  stats.json                       # Vote distribution, thresholds, IR runs
-  judge/                           # Judge queue, responses, aggregated outputs, stats
-  curate_answer/                   # (If answer validation runs) answer_stats.json, etc.
+  curated_items.judge.jsonl        # All items with IR annotation (all proceed to judge)
+  decisions.jsonl                  # IR annotation per item (difficulty label + vote counts)
+  stats.json                       # IR difficulty label counts, run metadata
+  curate_judge/
+    judge_queue.jsonl              # All items sent to citation-dependency judge
+    judge_responses_aggregated.jsonl
+    judge_responses_pass.jsonl     # Citation-dependency PASS (PASS_QP)
+    judge_responses_drop.jsonl     # Citation-dependency DROP (DROP_QP)
+    judge_stats.json
+  curate_answer/                   # (If answer validation runs)
+    answer_responses_aggregated.jsonl
+    answer_responses_pass.jsonl    # Answer validation PASS (PASS_ANS)
+    answer_responses_drop.jsonl
+    answer_stats.json
+  final_benchmark.jsonl            # All validated items (judge PASS ∩ answer PASS)
+  final_benchmark.csv              # Flat CSV of key fields for all validated items
+  final_hard.jsonl                 # Validated items with difficulty_tier = "challenging"
+  final_hard.csv                   # Flat CSV of challenging items
+  final_benchmark_stats.json       # Counts by difficulty_tier and ir_difficulty_label
 ```
 
-Decision audit schema (`decisions.jsonl`): `item_id`, `source_passage_id`, `target_passage_id`, `source_votes`, `target_votes`, `decision`, plus judge/result fields when present.
+`decisions.jsonl` audit schema per item: `item_id`, `source_passage_id`, `target_passage_id`, `ir_difficulty_label`, `source_vote_count`, `target_vote_count`, `both_vote_count`.
 
-## Voting Policy (Pair-level, Strict)
+## IR Annotation and Difficulty Labels
 
-- Count votes across all IR runs for `source_passage_id` and `target_passage_id` separately.
-- Thresholds (defaults from `cfg.curation.ir_agreement`):
-  - `keep_threshold` (default 4/5) — both source and target must meet or exceed to KEEP.
-  - `judge_threshold` (default 3/5) — if either side equals this and neither side ≤ drop threshold → JUDGE.
-  - `drop_threshold` (default 2/5 via policy: anything ≤2 on any side → DROP).
-- Both-must-hold: one strong side cannot rescue the other.
-- Borderline (JUDGE) items proceed to LLM; ties in judge aggregation DROP.
+IR vote counts are computed for every item and stored as metadata. They do **not** gate progression through the pipeline.
+
+### Vote computation
+
+For each retriever run and each item, the pipeline checks whether the source passage ID and target passage ID appear in the top-k results:
+
+- `source_vote_count` — number of retrievers that recovered the source passage
+- `target_vote_count` — number of retrievers that recovered the target passage
+- `both_vote_count` — number of retrievers that recovered **both**
+
+### `ir_difficulty_label` (6 values)
+
+| Label | Condition |
+|---|---|
+| `easy` | `both_vote_count > num_retrievers / 2` (majority co-retrieved both) |
+| `medium` | `both_vote_count ≥ 1` (at least one retriever co-retrieved both) |
+| `hard` | `both_vote_count == 0`; source retrieved by ≥1 retriever, target by ≥1 different retriever |
+| `source_only` | `both == 0`; only source retrieved |
+| `target_only` | `both == 0`; only target retrieved |
+| `neither` | No retriever recovered either passage |
+
+### `difficulty_tier` (2 values, final benchmark)
+
+The 6-way label is collapsed to a 2-way tier in the final benchmark records:
+
+| Tier | IR labels |
+|---|---|
+| `retrievable` | `easy`, `medium` |
+| `challenging` | `hard`, `source_only`, `target_only`, `neither` |
+
+Items from **all** tiers are included in the final benchmark. `challenging` items are additionally exported as `final_hard.jsonl/csv`.
+
+### Per-item IR fields (in `curated_items.judge.jsonl` and `final_benchmark.jsonl`)
+
+```json
+{
+  "ir_difficulty_label": "hard",
+  "difficulty_tier": "challenging",
+  "source_vote_count": 1,
+  "target_vote_count": 1,
+  "both_vote_count": 0,
+  "retrievers_recovering_source": ["bm25"],
+  "retrievers_recovering_target": ["e5"],
+  "retrievers_recovering_both": []
+}
+```
 
 ## Judge (Strict Citation-Dependency)
 
+- All items (regardless of IR outcome) are sent to the citation-dependency judge.
 - Backend: Azure OpenAI (recommended) or OpenAI, configured via YAML and environment.
-- Queue (`judge/judge_queue.jsonl`): question, source/target IDs, texts, votes, support runs, thresholds.
-- Response (`judge/judge_responses.jsonl`): `decision_qp` ∈ {`PASS_QP`,`DROP_QP`}, `confidence`, `source_alone_insufficient`, `reason_code_qp`, optional rationale/meta.
+- Queue (`curate_judge/judge_queue.jsonl`): question, source/target IDs, texts, IR metadata.
+- Response: `decision_qp` ∈ {`PASS_QP`, `DROP_QP`}, `confidence`, `source_alone_insufficient`, `reason_code_qp`, optional rationale/meta.
 - Aggregation: multi-pass, confidence-weighted; ties → DROP. PASS requires `source_alone_insufficient=true`; otherwise coerced to DROP with `QP_NOT_CIT_DEP`.
-- Outputs: `judge_responses_aggregated.jsonl`, `judge_responses_pass.jsonl` (citation-dependent only), `judge_responses_drop.jsonl`, `judge_stats.json`.
+- Outputs: `judge_responses_aggregated.jsonl`, `judge_responses_pass.jsonl`, `judge_responses_drop.jsonl`, `judge_stats.json`.
 - Environment (Azure example): `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_VERSION`, deployment name set in config.
 
 ### Judge reason codes (strict gate)
@@ -78,9 +129,33 @@ Decision audit schema (`decisions.jsonl`): `item_id`, `source_passage_id`, `targ
 
 ## Answer Validation (Optional)
 
-- Runs after judge on KEEP + judged-PASS unless `skip_answer` override is set.
-- Writes under `<curate_output_dir>/curate_answer/` (e.g., `answer_stats.json`).
+- Runs after judge on citation-dependency PASS items (all judge PASS, not just a KEEP tier).
+- Writes under `<curate_output_dir>/curate_answer/`.
 - Failures do not stop pipeline; failures are logged and items remain unless filtered by the answer module.
+
+## Final Benchmark Assembly (Phase 5)
+
+After answer validation, the pipeline assembles the final benchmark by intersecting judge PASS and answer PASS item sets:
+
+```
+final_benchmark = { items where decision_qp_final = PASS_QP } ∩ { items where decision_ans_final = PASS_ANS }
+```
+
+Each final item carries:
+- All original generator fields (`question`, `gold_answer`, `source_passage_id`, `target_passage_id`, `method`, `pair_uid`, `persona`)
+- `ir_difficulty_label` — 6-way diagnostic label
+- `difficulty_tier` — `"retrievable"` or `"challenging"`
+- Vote counts and retriever lists
+
+**Outputs**:
+
+| File | Contents |
+|---|---|
+| `final_benchmark.jsonl` | All validated items (both tiers) |
+| `final_benchmark.csv` | Key fields as flat CSV |
+| `final_hard.jsonl` | Only `difficulty_tier = "challenging"` items |
+| `final_hard.csv` | Flat CSV of challenging items |
+| `final_benchmark_stats.json` | `total_final`, `total_hard`, `difficulty_tier_counts`, `ir_difficulty_label_counts` |
 
 ## How to Run
 
@@ -130,14 +205,15 @@ python src/obliqaxref/curate/run_full_pipeline.py
 
 - **Strict citation-dependency:** Any item where the source alone answers must DROP with `QP_NOT_CIT_DEP`. PASS requires `source_alone_insufficient=true` from the judge response.
 - **Conservative defaults:** Judge aggregation ties DROP; low-consensus flagged in `judge_stats.json`.
-- **Pair-level enforcement:** Both source and target must independently meet thresholds; no single-sided keeps.
+- **IR is diagnostic only:** IR agreement (or lack of it) does not filter items. Challenging items pass if they satisfy citation-dependency and answer validity.
 - **Azure-only in code path:** Judge orchestration prefers Azure OpenAI; ensure credentials are set. Non-Azure may require config changes.
-- **IR alignment:** `runlist.json` runs and `top_k` must match thresholds; mismatches skew vote counts.
+- **No IR threshold gating:** `keep_threshold` / `judge_threshold` YAML keys are preserved for backward compatibility but have no effect on item selection in the current pipeline.
 
 ## Tips and Troubleshooting
 
 - If `items.jsonl` is missing, let the pipeline merge DPEL + SCHEMA outputs automatically, or pre-run merge yourself.
-- Judge queue size is controlled by thresholds: raising `keep_threshold` increases JUDGE volume and LLM cost.
+- All items go to the judge — LLM cost scales with the total item count, not a JUDGE tier.
 - When experimenting, set `--skip-answer` to shorten runtime; re-enable for final benchmarks.
-- Inspect `stats.json` for vote distributions and `judge_stats.json` for reason-code breakdown (especially `QP_NOT_CIT_DEP`).
+- Inspect `stats.json` for IR difficulty label distribution and `judge_stats.json` for reason-code breakdown (especially `QP_NOT_CIT_DEP`).
 - Errors during judge passes fall back to DROP with reason `QP_ILL_FORMED`; see logs for details.
+- `final_benchmark_stats.json` reports `difficulty_tier_counts` — use this to understand how many challenging items made it into the final benchmark.

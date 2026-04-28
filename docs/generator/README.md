@@ -17,6 +17,8 @@ Unlike standard QA benchmarks, ObliQA-XRef enforces **citation dependency**: eac
 ### Key Characteristics
 - **Two generation methods**: DPEL (direct prompt-based) and SCHEMA (extraction-based)
 - **Strict citation dependency validation**: All answers must tag both `[#SRC:uid]` and `[#TGT:uid]` and demonstrate joint reliance
+- **Citation-free prose**: By default, Q/A text must not contain rule or section identifiers. Evidence is expressed through passage tags, not inline citations.
+- **Citation leakage detection**: Post-generation scan flags items that inadvertently embed rule/section IDs into prose; configurable action (keep / filter / separate).
 - **Smart caching**: Resume interrupted runs without reprocessing pairs
 - **Scalable presets**: `smoke` (5 pairs), `dev` (50), `paper` (500), `full` (unlimited)
 - **Comprehensive reporting**: Per-method statistics and validation metrics
@@ -110,6 +112,7 @@ Each pair must pass ALL checks:
    - Optional dedup: drop duplicate questions (normalized) within run
    - Optional no-citations policy: forbid rule/section IDs in Q/A text (tags still required)
 5. **[D5]** Write valid `QAItem` objects to `dpel/dpel.qa.jsonl`
+6. **[D6]** Run citation leakage scan on each validated item (see [Citation Leakage Detection](#citation-leakage-detection))
 
 **SCHEMA Branch** (Extraction-based, two-phase):
 1. **[S1-Extract]** For each pair, extract structured schema:
@@ -128,6 +131,35 @@ Each pair must pass ALL checks:
 - Aggregate per-method counts: pairs processed, QAs generated, drop reasons (missing tags, dedup, invalid format, etc.)
 - Track LLM call statistics: model name, temperature, seed, token usage
 - Write comprehensive report to `stats/generate_report.json`
+
+---
+
+## Citation Leakage Detection
+
+After each Q&A item is validated, the generator scans both the question and answer for **citation leakage** — the presence of inline regulatory identifiers (rule/section numbers, article references) in the prose.
+
+**Why it matters**: Benchmark items should probe retrieval ability, not act as a lookup key. If the question already contains "Rule 3.2.1", a retriever can match on the identifier rather than semantic content, defeating the purpose of the benchmark.
+
+**What is detected** (`detect_citation_leakage(text)`):
+- Patterns such as `Rule 3.2`, `Article 272`, `Section 4(b)`, `COBS 9.2.1R`, `CRR Art. 36`
+- Passage-tag markers (`[#SRC:]`, `[#TGT:]`) are *not* flagged — those are required and intentional
+
+**Fields added to every `QAItem`**:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `question_has_leakage` | bool | Question prose contains a citation-like identifier |
+| `answer_has_leakage` | bool | Answer prose contains a citation-like identifier |
+| `leakage_spans_question` | list[str] | Matched spans in question |
+| `leakage_spans_answer` | list[str] | Matched spans in answer |
+
+**Configurable action** (`citation_leakage_action`):
+
+| Value | Behaviour |
+|---|---|
+| `keep` (default) | Flag but retain all items; leakage fields visible in output |
+| `filter` | Drop items where either question or answer has leakage |
+| `separate` | Write leaking items to a separate JSONL; keep clean items in main output |
 
 ---
 
@@ -185,6 +217,56 @@ These patterns are filtered out during pair selection:
 | **Trivial lookup** | Answer is just copying or finding a definition without synthesis | Q: "What does Rule 3.2 say?" A: "[Copy of Rule 3.2]" |
 
 **The strict citation dependency model ensures all generated Q&A require genuine understanding of regulatory relationships.**
+
+---
+
+## Citation-Free Prose Policy
+
+Both generation methods enforce a **citation-free prose** policy by default. This is distinct from evidence tagging.
+
+### What "citation-free" means
+
+- **Evidence tags** (`[#SRC:uid]`, `[#TGT:uid]`) — **required**; they prove joint passage reliance.
+- **Inline identifiers** (rule numbers, section references, article codes) — **forbidden** in Q/A prose by default; they create retrieval shortcuts.
+
+### Configuration
+
+```yaml
+generation:
+  no_citations: true               # Ban inline rule/section IDs in Q/A prose (default: true)
+  no_citations_in_question: true   # Same restriction applied to question text only (default: true)
+  citation_leakage_action: keep    # keep | filter | separate
+  dual_anchors_mode: always        # always | freeform_only | off
+```
+
+### CLI flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--no-citations/--allow-citations` | `--no-citations` | Enable/disable citation-free prose policy |
+| `--dual-anchors-mode` | `always` | SCHEMA dual-anchor constraint mode |
+| `--citation-leakage-action` | `keep` | Action for detected citation leakage |
+
+### DPEL prompt constraints (hardened)
+
+The DPEL system prompt contains two explicit citation-related constraints:
+
+- **Constraint 6 — STRICT NO-CITATIONS POLICY**: Four sub-bullets prohibit rule IDs, section numbers, article codes, and clause references in both question and answer prose. Evidence must come from passage content, not identifiers.
+- **Constraint 7 — Abort**: If both passages contain *only* rule IDs with no substantive text, the model must return an empty `qa_items` array rather than generate a leaky item.
+
+### SCHEMA prompt constraints
+
+The SCHEMA prompt mirrors the same policy:
+
+- **Rule 4 — STRICT NO-CITATIONS POLICY**: Same four sub-bullets as DPEL.
+- **Rule 5 — DUAL-ANCHOR REQUIREMENT**: When `dual_anchors_mode = always` (default), the model *must* place at least one factual claim from each passage in the answer, or abort with an empty array.
+
+### SCHEMA defaults (current release)
+
+| Setting | Old default | New default |
+|---|---|---|
+| `no_citations` | `False` | `True` |
+| `dual_anchors_mode` | `"freeform_only"` | `"always"` |
 
 ---
 
@@ -248,6 +330,25 @@ SourceID,TargetID,ReferenceText,ReferenceType
 
 **Statistics** (from real UKFIN run):
 - 334 documents → ~38,915 passages in corpus
+
+---
+
+## Configuration Reference
+
+### Full generation config block
+
+```yaml
+generation:
+  method: both                     # schema | dpel | both
+  temperature: 0.2
+  max_pairs: null                  # null = all
+
+  # Citation-free prose policy
+  no_citations: true               # Forbid inline rule/section IDs in Q/A prose (default: true)
+  no_citations_in_question: true   # Same guard on question text only (default: true)
+  citation_leakage_action: keep    # keep | filter | separate
+  dual_anchors_mode: always        # always | freeform_only | off
+```
 - 15,116 raw cross-references extracted
 - 11,288 citations after cleaning/ranking (87% survival rate)
 - Pairs built from cleaned citations: ~1,500–2,000 valid pairs
