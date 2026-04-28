@@ -12,6 +12,7 @@ This module:
 
 from __future__ import annotations
 
+import csv
 import json
 import logging
 import time
@@ -90,7 +91,10 @@ def count_votes(
     item: dict[str, Any],
     runs: dict[str, dict[str, list[str]]],
 ) -> tuple[int, int]:
-    """Count votes for source and target passages."""
+    """Count votes for source and target passages.
+
+    Kept for backward compatibility. Prefer compute_detailed_votes() for new code.
+    """
     item_id = item["item_id"]
     source_pid = item["source_passage_id"]
     target_pid = item["target_passage_id"]
@@ -109,19 +113,285 @@ def count_votes(
     return source_votes, target_votes
 
 
-def apply_voting_policy(
-    source_votes: int,
-    target_votes: int,
-    keep_threshold: int = 4,
-    judge_threshold: int = 3,
+def compute_detailed_votes(
+    item: dict[str, Any],
+    runs: dict[str, dict[str, list[str]]],
+) -> dict[str, Any]:
+    """
+    Compute per-retriever IR vote detail for a single item.
+
+    Returns a dict with:
+        source_vote_count          — number of retrievers that recovered the source passage
+        target_vote_count          — number of retrievers that recovered the target passage
+        both_vote_count            — number of retrievers that recovered BOTH passages
+        retrievers_recovering_source  — list of run names that recovered source
+        retrievers_recovering_target  — list of run names that recovered target
+        retrievers_recovering_both    — list of run names that recovered both
+    """
+    item_id = item["item_id"]
+    source_pid = item["source_passage_id"]
+    target_pid = item["target_passage_id"]
+
+    retrievers_recovering_source: list[str] = []
+    retrievers_recovering_target: list[str] = []
+    retrievers_recovering_both: list[str] = []
+
+    for run_name, results in runs.items():
+        retrieved_pids = results.get(item_id, [])
+        got_source = source_pid in retrieved_pids
+        got_target = target_pid in retrieved_pids
+        if got_source:
+            retrievers_recovering_source.append(run_name)
+        if got_target:
+            retrievers_recovering_target.append(run_name)
+        if got_source and got_target:
+            retrievers_recovering_both.append(run_name)
+
+    return {
+        "source_vote_count": len(retrievers_recovering_source),
+        "target_vote_count": len(retrievers_recovering_target),
+        "both_vote_count": len(retrievers_recovering_both),
+        "retrievers_recovering_source": retrievers_recovering_source,
+        "retrievers_recovering_target": retrievers_recovering_target,
+        "retrievers_recovering_both": retrievers_recovering_both,
+    }
+
+
+def assign_ir_difficulty_label(
+    source_vote_count: int,
+    target_vote_count: int,
+    both_vote_count: int,
+    num_retrievers: int,
 ) -> str:
-    """Apply voting policy: both must hold."""
-    if source_votes >= keep_threshold and target_votes >= keep_threshold:
-        return "KEEP"
-    elif source_votes == judge_threshold or target_votes == judge_threshold:
-        return "JUDGE"
-    else:
-        return "DROP"
+    """
+    Assign a diagnostic IR difficulty label based on retriever vote counts.
+
+    Labels (not used for selection — diagnostic only):
+        easy        — majority (> 50 %) of retrievers recover both source and target
+        medium      — at least one retriever recovers both, but not a majority
+        hard        — no retriever recovers both, but ≥1 recovers each individually
+        source_only — no retriever recovers both; source recovered, target not
+        target_only — no retriever recovers both; target recovered, source not
+        neither     — no retriever recovers source or target
+    """
+    if both_vote_count == 0:
+        if source_vote_count > 0 and target_vote_count > 0:
+            return "hard"
+        if source_vote_count > 0:
+            return "source_only"
+        if target_vote_count > 0:
+            return "target_only"
+        return "neither"
+
+    majority = (num_retrievers / 2) if num_retrievers > 0 else 0
+    if both_vote_count > majority:
+        return "easy"
+    return "medium"
+
+
+# ---------------------------------------------------------------------------
+# Difficulty tier helpers
+# ---------------------------------------------------------------------------
+
+_CHALLENGING_LABELS: frozenset[str] = frozenset(
+    {"hard", "source_only", "target_only", "neither"}
+)
+
+
+def assign_difficulty_tier(ir_difficulty_label: str) -> str:
+    """Collapse 6-way IR difficulty label into a 2-way benchmark tier.
+
+    Returns:
+        ``"challenging"`` — IR systems failed to co-retrieve the evidence pair
+            (labels: hard, source_only, target_only, neither).
+        ``"retrievable"`` — majority or at least one retriever recovered both
+            passages (labels: easy, medium).
+    """
+    return "challenging" if ir_difficulty_label in _CHALLENGING_LABELS else "retrievable"
+
+
+# CSV columns written for every benchmark export
+_BENCHMARK_CSV_FIELDS = (
+    "item_id",
+    "question",
+    "gold_answer",
+    "source_passage_id",
+    "target_passage_id",
+    "method",
+    "pair_uid",
+    "ir_difficulty_label",
+    "difficulty_tier",
+    "source_vote_count",
+    "target_vote_count",
+    "both_vote_count",
+)
+
+
+def assemble_final_benchmark(
+    curate_out: Path,
+    items_file: Path,
+) -> dict[str, Any]:
+    """Assemble the final benchmark from citation-dependency + answer PASS items.
+
+    Reads:
+        ``curate_judge/judge_responses_pass.jsonl`` — citation-dependency PASS ids
+        ``curate_answer/answer_responses_pass.jsonl`` — answer-validation PASS ids
+        ``curated_items.judge.jsonl`` — all items with IR metadata
+        ``items_file`` — generator items (question / gold_answer text)
+
+    Writes (inside *curate_out*):
+        ``final_benchmark.jsonl`` — all validated items
+        ``final_benchmark.csv``   — flat CSV of key fields
+        ``final_hard.jsonl``      — items with difficulty_tier == "challenging"
+        ``final_hard.csv``        — flat CSV of challenging items
+        ``final_benchmark_stats.json`` — counts by difficulty_tier / label
+
+    Returns a stats dict.
+    """
+    judge_pass_file = curate_out / "curate_judge" / "judge_responses_pass.jsonl"
+    answer_pass_file = curate_out / "curate_answer" / "answer_responses_pass.jsonl"
+    ir_items_file = curate_out / "curated_items.judge.jsonl"
+
+    # ---------------------------------------------------------------- load ids
+    if not judge_pass_file.exists():
+        logger.warning(
+            "Judge PASS file not found (%s); skipping final benchmark assembly",
+            judge_pass_file,
+        )
+        return {}
+
+    judge_pass_ids: set[str] = set()
+    with open(judge_pass_file, encoding="utf-8") as f:
+        for line in f:
+            obj = json.loads(line)
+            if obj.get("decision_qp_final") == "PASS_QP":
+                iid = obj.get("item_id")
+                if iid:
+                    judge_pass_ids.add(iid)
+
+    if not answer_pass_file.exists():
+        logger.warning(
+            "Answer PASS file not found (%s); skipping final benchmark assembly",
+            answer_pass_file,
+        )
+        return {}
+
+    answer_pass_ids: set[str] = set()
+    with open(answer_pass_file, encoding="utf-8") as f:
+        for line in f:
+            obj = json.loads(line)
+            if obj.get("decision_ans_final") == "PASS_ANS":
+                iid = obj.get("item_id")
+                if iid:
+                    answer_pass_ids.add(iid)
+
+    final_ids: set[str] = judge_pass_ids & answer_pass_ids
+    logger.info(
+        "  Final benchmark: %d judge-PASS ∩ %d answer-PASS = %d items",
+        len(judge_pass_ids),
+        len(answer_pass_ids),
+        len(final_ids),
+    )
+
+    # ---------------------------------------------------------- load metadata
+    ir_items_by_id: dict[str, dict[str, Any]] = {}
+    if ir_items_file.exists():
+        with open(ir_items_file, encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                iid = obj.get("item_id")
+                if iid:
+                    ir_items_by_id[iid] = obj
+
+    gen_items_by_id: dict[str, dict[str, Any]] = {}
+    if items_file.exists():
+        with open(items_file, encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                iid = obj.get("item_id")
+                if iid:
+                    gen_items_by_id[iid] = obj
+
+    # ------------------------------------------ build final benchmark records
+    final_items: list[dict[str, Any]] = []
+    for iid in sorted(final_ids):  # stable order
+        gen = gen_items_by_id.get(iid, {})
+        ir = ir_items_by_id.get(iid, {})
+
+        ir_label = ir.get("ir_difficulty_label", "unknown")
+        record: dict[str, Any] = {
+            "item_id": iid,
+            "question": gen.get("question", ""),
+            "gold_answer": gen.get("gold_answer", ""),
+            "source_passage_id": gen.get("source_passage_id", ir.get("source_passage_id", "")),
+            "target_passage_id": gen.get("target_passage_id", ir.get("target_passage_id", "")),
+            "method": gen.get("method", ""),
+            "pair_uid": gen.get("pair_uid", ""),
+            "persona": gen.get("persona", ""),
+            "ir_difficulty_label": ir_label,
+            "difficulty_tier": assign_difficulty_tier(ir_label),
+            "source_vote_count": ir.get("source_vote_count", 0),
+            "target_vote_count": ir.get("target_vote_count", 0),
+            "both_vote_count": ir.get("both_vote_count", 0),
+            "retrievers_recovering_source": ir.get("retrievers_recovering_source", []),
+            "retrievers_recovering_target": ir.get("retrievers_recovering_target", []),
+            "retrievers_recovering_both": ir.get("retrievers_recovering_both", []),
+        }
+        final_items.append(record)
+
+    hard_items = [
+        item for item in final_items if item["difficulty_tier"] == "challenging"
+    ]
+
+    # ------------------------------------------------------------- write JSONL
+    def _write_jsonl(path: Path, items: list[dict[str, Any]]) -> None:
+        with open(path, "w", encoding="utf-8") as f:
+            for item in items:
+                f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+    def _write_csv(path: Path, items: list[dict[str, Any]]) -> None:
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=list(_BENCHMARK_CSV_FIELDS),
+                extrasaction="ignore",
+            )
+            writer.writeheader()
+            writer.writerows(items)
+
+    _write_jsonl(curate_out / "final_benchmark.jsonl", final_items)
+    _write_csv(curate_out / "final_benchmark.csv", final_items)
+    _write_jsonl(curate_out / "final_hard.jsonl", hard_items)
+    _write_csv(curate_out / "final_hard.csv", hard_items)
+
+    logger.info(
+        "  ✓ final_benchmark.jsonl / .csv  (%d items)", len(final_items)
+    )
+    logger.info(
+        "  ✓ final_hard.jsonl / .csv       (%d challenging items)", len(hard_items)
+    )
+
+    # ------------------------------------------------------------------ stats
+    label_counts: dict[str, int] = {}
+    tier_counts: dict[str, int] = {"retrievable": 0, "challenging": 0}
+    for item in final_items:
+        lbl = item["ir_difficulty_label"]
+        label_counts[lbl] = label_counts.get(lbl, 0) + 1
+        tier_counts[item["difficulty_tier"]] = (
+            tier_counts.get(item["difficulty_tier"], 0) + 1
+        )
+
+    stats: dict[str, Any] = {
+        "total_final": len(final_items),
+        "total_hard": len(hard_items),
+        "difficulty_tier_counts": tier_counts,
+        "ir_difficulty_label_counts": label_counts,
+    }
+
+    with open(curate_out / "final_benchmark_stats.json", "w", encoding="utf-8") as f:
+        json.dump(stats, f, ensure_ascii=False, indent=2)
+
+    return stats
 
 
 def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, Any]:
@@ -209,109 +479,101 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
 
     logger.info(f"  ✓ Loaded {len(items)} items, {len(passages)} passages")
 
-    # Count votes and apply policy
-    logger.info("\n[Phase 2.2] Counting votes and applying policy...")
+    # Count votes and assign IR difficulty labels
+    logger.info("\n[Phase 2.2] Computing IR votes and assigning difficulty labels...")
 
-    keep_threshold = cfg.curation.ir_agreement.keep_threshold
-    judge_threshold = cfg.curation.ir_agreement.judge_threshold
+    num_retrievers = len(runs)
+    all_items_annotated: list[dict[str, Any]] = []
 
-    decisions = []
-    keep_items = []
-    judge_items = []
-    drop_items = []
+    label_counts: dict[str, int] = {
+        "easy": 0, "medium": 0, "hard": 0,
+        "source_only": 0, "target_only": 0, "neither": 0,
+    }
 
     for item in items:
-        source_votes, target_votes = count_votes(item, runs)
-        decision = apply_voting_policy(source_votes, target_votes, keep_threshold, judge_threshold)
+        vote_detail = compute_detailed_votes(item, runs)
+        difficulty_label = assign_ir_difficulty_label(
+            vote_detail["source_vote_count"],
+            vote_detail["target_vote_count"],
+            vote_detail["both_vote_count"],
+            num_retrievers,
+        )
+        label_counts[difficulty_label] = label_counts.get(difficulty_label, 0) + 1
 
-        decision_data = {
-            "item_id": item["item_id"],
-            "decision": decision,
-            "source_votes": source_votes,
-            "target_votes": target_votes,
-            "source_passage_id": item["source_passage_id"],
-            "target_passage_id": item["target_passage_id"],
-        }
-        decisions.append(decision_data)
-
-        # Also create curated item with text
         curated_item = dict(item)
-        curated_item["decision"] = decision
-        curated_item["source_votes"] = source_votes
-        curated_item["target_votes"] = target_votes
 
-        # Add passage text if available
+        # IR metadata — stored as diagnostic; NOT used for selection
+        curated_item["ir_difficulty_label"] = difficulty_label
+        curated_item["source_vote_count"] = vote_detail["source_vote_count"]
+        curated_item["target_vote_count"] = vote_detail["target_vote_count"]
+        curated_item["both_vote_count"] = vote_detail["both_vote_count"]
+        curated_item["retrievers_recovering_source"] = vote_detail["retrievers_recovering_source"]
+        curated_item["retrievers_recovering_target"] = vote_detail["retrievers_recovering_target"]
+        curated_item["retrievers_recovering_both"] = vote_detail["retrievers_recovering_both"]
+
+        # All items proceed to citation-dependency judge regardless of IR outcome
+        curated_item["decision_ir"] = "JUDGE_IR"
+
+        # Attach passage text if available
         if item["source_passage_id"] in passages:
             curated_item["source_text"] = passages[item["source_passage_id"]].get("passage", "")
         if item["target_passage_id"] in passages:
             curated_item["target_text"] = passages[item["target_passage_id"]].get("passage", "")
 
-        if decision == "KEEP":
-            keep_items.append(curated_item)
-        elif decision == "JUDGE":
-            judge_items.append(curated_item)
-        else:
-            drop_items.append(curated_item)
+        all_items_annotated.append(curated_item)
 
-    keep_count = len(keep_items)
-    judge_count = len(judge_items)
-    drop_count = len(drop_items)
-
-    logger.info("  ✓ Vote results:")
-    logger.info(f"      KEEP:  {keep_count:4d} items ({100 * keep_count / len(items):.1f}%)")
-    logger.info(f"      JUDGE: {judge_count:4d} items ({100 * judge_count / len(items):.1f}%)")
-    logger.info(f"      DROP:  {drop_count:4d} items ({100 * drop_count / len(items):.1f}%)")
+    total_items = len(all_items_annotated)
+    logger.info("  ✓ IR difficulty labels assigned (%d items):", total_items)
+    for lbl, cnt in sorted(label_counts.items()):
+        pct = 100 * cnt / total_items if total_items else 0
+        logger.info("      %-12s %4d  (%5.1f%%)", lbl, cnt, pct)
 
     # Write outputs
     logger.info("\n[Step 3] Writing outputs...")
 
-    # Write curated items by tier
-    keep_file = out_dir / "curated_items.keep.jsonl"
+    # All items go to the judge input file (selection is now purely validity-based)
     judge_file = out_dir / "curated_items.judge.jsonl"
-    drop_file = out_dir / "curated_items.drop.jsonl"
+    with open(judge_file, "w") as f:
+        for item in all_items_annotated:
+            f.write(json.dumps(item) + "\n")
+    logger.info("  ✓ %s (%d items — all proceed to citation-dependency judge)", judge_file.name, total_items)
 
-    for items_list, filepath in [
-        (keep_items, keep_file),
-        (judge_items, judge_file),
-        (drop_items, drop_file),
-    ]:
-        if items_list:
-            with open(filepath, "w") as f:
-                for item in items_list:
-                    f.write(json.dumps(item) + "\n")
-            logger.info(f"  ✓ {filepath.name} ({len(items_list)} items)")
-
-    # Write decisions
+    # Decisions file (IR annotation summary — diagnostic)
+    decisions = [
+        {
+            "item_id": item["item_id"],
+            "ir_difficulty_label": item["ir_difficulty_label"],
+            "source_vote_count": item["source_vote_count"],
+            "target_vote_count": item["target_vote_count"],
+            "both_vote_count": item["both_vote_count"],
+            "source_passage_id": item["source_passage_id"],
+            "target_passage_id": item["target_passage_id"],
+        }
+        for item in all_items_annotated
+    ]
     decisions_file = out_dir / "decisions.jsonl"
     with open(decisions_file, "w") as f:
         for d in decisions:
             f.write(json.dumps(d) + "\n")
-    logger.info(f"  ✓ {decisions_file.name}")
+    logger.info("  ✓ %s (IR annotation — diagnostic)", decisions_file.name)
 
     # Compute statistics
     logger.info("\n[Phase 2.3] Computing statistics...")
 
-    # Vote distribution
-    vote_dist = {}
-    for d in decisions:
-        key = f"src:{d['source_votes']}_tgt:{d['target_votes']}"
-        vote_dist[key] = vote_dist.get(key, 0) + 1
-
     stats = {
-        "total_items": len(items),
-        "initial_decision_counts": {
-            "KEEP": keep_count,
-            "JUDGE": judge_count,
-            "DROP": drop_count,
-        },
-        "vote_distribution": vote_dist,
+        "total_items": total_items,
+        "ir_difficulty_label_counts": label_counts,
         "policy": {
-            "keep_threshold": keep_threshold,
-            "judge_threshold": judge_threshold,
-            "both_must_hold": True,
+            "ir_role": "diagnostic_only",
+            "selection_criterion": "citation_dependency_validity + answer_validity",
+            "note": (
+                "IR agreement is stored as ir_difficulty_label metadata. "
+                "Final benchmark selection is based on LLM citation-dependency judge "
+                "and answer validation only."
+            ),
         },
         "ir_runs": list(runs.keys()),
-        "num_ir_methods": len(runs),
+        "num_ir_methods": num_retrievers,
     }
 
     stats_file = out_dir / "stats.json"
@@ -319,30 +581,30 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
         json.dump(stats, f, indent=2)
     logger.info(f"  ✓ {stats_file.name}")
 
-    # Summary of voting phase
+    # Summary of IR annotation phase
     logger.info("\n" + "=" * 70)
-    logger.info("PHASE 2 (VOTING) COMPLETE")
+    logger.info("PHASE 2 (IR ANNOTATION) COMPLETE")
     logger.info("=" * 70)
     logger.info(f"Outputs written to: {out_dir}")
 
-    # Phase 3: Call judge LLM on JUDGE tier items
-    if judge_count > 0 and not (overrides and overrides.skip_judge):
-        logger.info("\n[Phase 3] Running judge LLM on JUDGE tier items...")
+    # Phase 3: Citation-dependency judge on ALL items
+    if total_items > 0 and not (overrides and overrides.skip_judge):
+        logger.info("\n[Phase 3] Running citation-dependency judge on all %d items...", total_items)
         try:
             from obliqaxref.curate.judge import run_judge
 
             run_judge(cfg)
             logger.info("  ✓ Judge evaluation complete")
         except Exception as e:
-            logger.warning(f"Judge evaluation failed: {e}. Continuing with voting results.")
+            logger.warning(f"Judge evaluation failed: {e}. Continuing without judge filter.")
     elif overrides and overrides.skip_judge:
         logger.info("\n[Phase 3] Skipping judge (--skip-judge)")
     else:
-        logger.info("\n[Phase 3] No JUDGE tier items to evaluate")
+        logger.info("\n[Phase 3] No items to judge")
 
-    # Phase 4: Answer validation on KEEP + JUDGE PASS items
+    # Phase 4: Answer validation on judge PASS items
     if not (overrides and overrides.skip_answer):
-        logger.info("\n[Phase 4] Running answer validation on PASS items (KEEP + JUDGE PASS)...")
+        logger.info("\n[Phase 4] Running answer validation on citation-dependency PASS items...")
         try:
             from obliqaxref.curate.answer.run import run_answer_validation
 
@@ -371,6 +633,22 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
             logger.warning(f"Answer validation failed: {e}. Continuing without answer filter.")
     else:
         logger.info("\n[Phase 4] Skipping answer validation (--skip-answer)")
+
+    # Phase 5: Assemble final benchmark (runs unconditionally — skipped if
+    # required upstream files don't exist yet, e.g. when phases 3/4 were skipped)
+    logger.info("\n[Phase 5] Assembling final benchmark...")
+    _items_file = Path(cfg.paths.output_dir) / "generator" / "items.jsonl"
+    try:
+        bench_stats = assemble_final_benchmark(out_dir, _items_file)
+        if bench_stats:
+            stats["final_benchmark"] = bench_stats
+            logger.info(
+                "  ✓ Final benchmark: %d items total (%d challenging)",
+                bench_stats.get("total_final", 0),
+                bench_stats.get("total_hard", 0),
+            )
+    except Exception as e:
+        logger.warning("Final benchmark assembly failed: %s", e)
 
     # Final summary
     elapsed = time.time() - start_time
