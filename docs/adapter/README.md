@@ -1,8 +1,8 @@
-# XRefRAG Adapter Module
+# ObliQA-XRef Adapter Module
 
 ## Overview
 
-The **Adapter Module** (`src/xrefrag/adapter/`) normalizes and processes regulatory corpora into standardized canonical artifacts. It transforms raw regulatory documents and cross-references into cleaned, deduplicated passages and resolved citation pairs—ready for downstream generation and curation.
+The **Adapter Module** (`src/obliqaxref/adapter/`) normalizes and processes regulatory corpora into standardized canonical artifacts. It transforms raw regulatory documents and cross-references into cleaned, deduplicated passages and resolved citation pairs—ready for downstream generation and curation.
 
 ### Key Characteristics
 - **Multi-corpus support**: Currently supports UK Financial Regulations (UKFIN: PRA Rulebook) and ADGM (Abu Dhabi Global Market regulations)
@@ -24,7 +24,7 @@ The **Adapter Module** (`src/xrefrag/adapter/`) normalizes and processes regulat
 ## Directory Structure
 
 ```text
-src/xrefrag/adapter/
+src/obliqaxref/adapter/
 ├── run.py                   # Main dispatcher (corpus routing)
 ├── cli.py                   # CLI integration
 ├── ukfin/                   # UK Financial Regulations adapter
@@ -99,7 +99,7 @@ src/xrefrag/adapter/
   - Count documents, passages, passages per doc
   - Compute citation statistics (internal/external split, avg per passage)
   - Breakdown reference types and removed row reasons
-  - Output: xrefrag_stats.raw.json, adapter_report.json
+  - Output: obliqaxref_stats.raw.json, adapter_report.json
 ```
 
 ### ADGM (File-based) Pipeline
@@ -120,7 +120,7 @@ src/xrefrag/adapter/
 
 [A3] Statistics & Reporting
   - Same as UKFIN step A5 above
-  - Output: xrefrag_stats.raw.json, adapter_report.json
+  - Output: obliqaxref_stats.raw.json, adapter_report.json
 ```
 
 ### Output Artifacts (Both Corpora)
@@ -133,7 +133,7 @@ runs/adapter_{ukfin|adgm}/
 │   ├── crossref_resolved.csv
 │   ├── crossref_resolved.cleaned.csv
 │   ├── cleaning_report.json
-│   ├── xrefrag_stats.raw.json
+│   ├── obliqaxref_stats.raw.json
 │   └── adapter_report.json
 └── registry/
     ├── (UKFIN only) pra_rulebook_discover.json
@@ -245,7 +245,7 @@ runs/adapter_ukfin/
 │   ├── crossref_resolved.csv
 │   ├── crossref_resolved.cleaned.csv
 │   ├── cleaning_report.json
-│   ├── xrefrag_stats.raw.json
+│   ├── obliqaxref_stats.raw.json
 │   └── adapter_report.json
 └── registry/
     ├── pra_rulebook_discover.json       (discovery metadata)
@@ -261,7 +261,7 @@ runs/adapter_adgm/
 │   ├── crossref_resolved.csv
 │   ├── crossref_resolved.cleaned.csv
 │   ├── cleaning_report.json
-│   ├── xrefrag_stats.raw.json
+│   ├── obliqaxref_stats.raw.json
 │   └── adapter_report.json
 └── registry/
     └── (empty or minimal metadata)
@@ -324,7 +324,7 @@ runs/adapter_adgm/
 - Hash of: `doc_id + heading_path + passage_text[:100] + other metadata`
 - Deterministic: same passage always gets same UID
 - Enables reproducible cross-reference linking
-- See [src/xrefrag/adapter/ukfin/corpus.py](../../src/xrefrag/adapter/ukfin/corpus.py) for exact formula
+- See [src/obliqaxref/adapter/ukfin/corpus.py](../../src/obliqaxref/adapter/ukfin/corpus.py) for exact formula
 
 ### 2) Raw Cross-References: `crossref_resolved.csv`
 
@@ -419,7 +419,7 @@ SourceID,SourceDocumentID,SourcePassageID,SourcePassage,ReferenceText,ReferenceT
 }
 ```
 
-### 5) Statistics Report: `xrefrag_stats.raw.json`
+### 5) Statistics Report: `obliqaxref_stats.raw.json`
 
 **Format**: JSON object with corpus and citation statistics.
 
@@ -467,7 +467,7 @@ SourceID,SourceDocumentID,SourcePassageID,SourcePassage,ReferenceText,ReferenceT
     "crossref_csv": "runs/adapter_ukfin/processed/crossref_resolved.csv",
     "cleaned_csv": "runs/adapter_ukfin/processed/crossref_resolved.cleaned.csv",
     "cleaning_report_json": "runs/adapter_ukfin/processed/cleaning_report.json",
-    "stats_json": "runs/adapter_ukfin/processed/xrefrag_stats.raw.json"
+    "stats_json": "runs/adapter_ukfin/processed/obliqaxref_stats.raw.json"
   },
   "discovery": {
     "pra_rulebook": {
@@ -521,7 +521,7 @@ SourceID,SourceDocumentID,SourcePassageID,SourcePassage,ReferenceText,ReferenceT
 
 ### UKFIN Config Schema
 
-See [src/xrefrag/adapter/ukfin/types.py](../../src/xrefrag/adapter/ukfin/types.py) for `UkFinAdapterConfig`:
+See [src/obliqaxref/adapter/ukfin/types.py](../../src/obliqaxref/adapter/ukfin/types.py) for `UkFinAdapterConfig`:
 
 ```python
 class UkFinAdapterConfig(BaseModel):
@@ -535,7 +535,7 @@ class UkFinAdapterConfig(BaseModel):
 
 ### ADGM Config Schema
 
-See [src/xrefrag/adapter/adgm/types.py](../../src/xrefrag/adapter/adgm/types.py) for `AdgmAdapterConfig`:
+See [src/obliqaxref/adapter/adgm/types.py](../../src/obliqaxref/adapter/adgm/types.py) for `AdgmAdapterConfig`:
 
 ```python
 class AdgmAdapterConfig(BaseModel):
@@ -556,13 +556,13 @@ class AdgmAdapterConfig(BaseModel):
 
 ```bash
 # Run adapter with project config (corpus specified in YAML)
-python -m xrefrag adapter --config configs/project.yaml
+python -m obliqaxref adapter --config configs/project.yaml
 ```
 
 ### Command Reference
 
 ```bash
-python -m xrefrag adapter --config <path> [--log-level <level>]
+python -m obliqaxref adapter --config <path> [--log-level <level>]
 ```
 
 **Options**:
@@ -574,10 +574,10 @@ python -m xrefrag adapter --config <path> [--log-level <level>]
 
 ```bash
 # Full pipeline with defaults
-python -m xrefrag adapter --config configs/project.yaml
+python -m obliqaxref adapter --config configs/project.yaml
 
 # With DEBUG logging to see per-stage details
-python -m xrefrag adapter --config configs/project.yaml --log-level DEBUG
+python -m obliqaxref adapter --config configs/project.yaml --log-level DEBUG
 
 # Custom config with overrides (edit YAML `stages` field to skip phases)
 # E.g., stages: [corpus, crossref, clean] skips download if passage_corpus.jsonl exists
@@ -652,9 +652,9 @@ Run 1: Download fails halfway → resume Run 2
 
 ---
 
-- **UKFIN config schema**: [src/xrefrag/adapter/ukfin/types.py](../../src/xrefrag/adapter/ukfin/types.py)
-- **UKFIN HTML parsing**: [src/xrefrag/adapter/ukfin/corpus.py](../../src/xrefrag/adapter/ukfin/corpus.py)
-- **Citation extraction**: [src/xrefrag/adapter/ukfin/crossref.py](../../src/xrefrag/adapter/ukfin/crossref.py)
-- **Cleaning & ranking**: [src/xrefrag/adapter/ukfin/clean_crossref.py](../../src/xrefrag/adapter/ukfin/clean_crossref.py)
+- **UKFIN config schema**: [src/obliqaxref/adapter/ukfin/types.py](../../src/obliqaxref/adapter/ukfin/types.py)
+- **UKFIN HTML parsing**: [src/obliqaxref/adapter/ukfin/corpus.py](../../src/obliqaxref/adapter/ukfin/corpus.py)
+- **Citation extraction**: [src/obliqaxref/adapter/ukfin/crossref.py](../../src/obliqaxref/adapter/ukfin/crossref.py)
+- **Cleaning & ranking**: [src/obliqaxref/adapter/ukfin/clean_crossref.py](../../src/obliqaxref/adapter/ukfin/clean_crossref.py)
 - **Config examples**: [configs/](../../configs/) directory
 - **Example output**: [runs/adapter_ukfin/](../../runs/adapter_ukfin/) and [runs/adapter_adgm/](../../runs/adapter_adgm/)

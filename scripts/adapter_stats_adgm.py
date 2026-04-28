@@ -3,7 +3,7 @@ Compute statistics for ADGM corpus and crossrefs.
 
 Usage:
     python scripts/adapter_stats_adgm.py
-    python scripts/adapter_stats_adgm.py --corpus data/adgm/processed/passage_corpus.jsonl --crossref data/adgm/processed/crossref_resolved.cleaned.csv --output data/adgm/processed/xrefrag_stats.raw.json
+    python scripts/adapter_stats_adgm.py --corpus data/adgm/processed/passage_corpus.jsonl --crossref data/adgm/processed/crossref_resolved.cleaned.csv --output data/adgm/processed/obliqaxref_stats.raw.json
 """
 
 from __future__ import annotations

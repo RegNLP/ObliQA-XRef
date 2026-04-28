@@ -1,6 +1,6 @@
-# XRefRag Utility Scripts
+# ObliQA-XRef Utility Scripts
 
-Standalone utility scripts for XRefRag pipeline stages.
+Standalone utility scripts for ObliQA-XRef pipeline stages.
 
 ## Adapter Statistics
 
@@ -11,7 +11,7 @@ python scripts/adapter_stats_adgm.py
 python scripts/adapter_stats_adgm.py \
   --corpus runs/adapter_adgm/processed/passage_corpus.jsonl \
   --crossref runs/adapter_adgm/processed/crossref_resolved.cleaned.csv \
-  --output runs/adapter_adgm/processed/xrefrag_stats.raw.json
+  --output runs/adapter_adgm/processed/obliqaxref_stats.raw.json
 ```
 
 Outputs:
@@ -27,7 +27,7 @@ python scripts/adapter_stats_ukfin.py
 python scripts/adapter_stats_ukfin.py \
   --corpus data/ukfin/processed/passage_corpus.jsonl \
   --crossref data/ukfin/processed/crossref_resolved.cleaned.csv \
-  --output data/ukfin/processed/xrefrag_stats.raw.json
+  --output data/ukfin/processed/obliqaxref_stats.raw.json
 ```
 
 Outputs:

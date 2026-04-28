@@ -1,12 +1,12 @@
-# XRefRAG Generation Module
+# ObliQA-XRef Generation Module
 
 ## Overview
 
-The **Generation Module** (`src/xrefrag/generate/`) produces **citation-dependent Q&A benchmarks** from regulatory document pairs. It consumes adapter outputs—`passage_corpus.jsonl` (normalized passages) and `crossref_resolved.cleaned.csv` (citation pairs)—and generates high-quality questions where **correct answers require joint use of source and target passages**.
+The **Generation Module** (`src/obliqaxref/generate/`) produces **citation-dependent Q&A benchmarks** from regulatory document pairs. It consumes adapter outputs—`passage_corpus.jsonl` (normalized passages) and `crossref_resolved.cleaned.csv` (citation pairs)—and generates high-quality questions where **correct answers require joint use of source and target passages**.
 
 ### Core Innovation: Citation Dependency
 
-Unlike standard QA benchmarks, XRefRAG enforces **citation dependency**: each question requires reading *both* passages to answer correctly. This captures the real-world nature of regulatory research, where domain experts must understand how one rule cites or relates to another.
+Unlike standard QA benchmarks, ObliQA-XRef enforces **citation dependency**: each question requires reading *both* passages to answer correctly. This captures the real-world nature of regulatory research, where domain experts must understand how one rule cites or relates to another.
 
 **Key principle**: A question is citation-dependent if:
 1. The **source passage** contains a citation or reference
@@ -27,7 +27,7 @@ Unlike standard QA benchmarks, XRefRAG enforces **citation dependency**: each qu
 ## Directory Structure
 
 ```text
-src/xrefrag/generate/
+src/obliqaxref/generate/
 ├── run.py                   # Main orchestration, pair building, filtering
 ├── types.py                 # Type definitions (Pair, QAItem, Passage, etc.)
 ├── cli.py                   # CLI entrypoint with Typer
@@ -135,7 +135,7 @@ Each pair must pass ALL checks:
 
 ### Conceptual Foundation
 
-**Citation dependency** is the core of XRefRAG's innovation. It enforces that questions cannot be answered from a single passage alone—both source and target passages are *jointly necessary*.
+**Citation dependency** is the core of ObliQA-XRef's innovation. It enforces that questions cannot be answered from a single passage alone—both source and target passages are *jointly necessary*.
 
 #### Why This Matters
 
@@ -501,7 +501,7 @@ adapter:
 
 #### Basic Command
 ```bash
-python -m xrefrag generate [--config PATH] [OPTIONS]
+python -m obliqaxref generate [--config PATH] [OPTIONS]
 ```
 
 #### Core Options
@@ -561,20 +561,20 @@ python -m xrefrag generate [--config PATH] [OPTIONS]
 
 ```bash
 # Quick smoke test (5 pairs, no LLM calls)
-python -m xrefrag generate \
+python -m obliqaxref generate \
   --config configs/project.yaml \
   --preset smoke \
   --dry_run
 
 # Development run (50 pairs, both methods, temp=0.1)
-python -m xrefrag generate \
+python -m obliqaxref generate \
   --config configs/project.yaml \
   --preset dev \
   --method both \
   --temperature 0.1
 
 # Full production run (all pairs, schema only)
-python -m xrefrag generate \
+python -m obliqaxref generate \
   --config configs/project.yaml \
   --preset full \
   --method schema \
@@ -582,7 +582,7 @@ python -m xrefrag generate \
   --seed 13
 
 # Manual override (100 pairs, DPEL only, dedup disabled)
-python -m xrefrag generate \
+python -m obliqaxref generate \
   --config configs/project.yaml \
   --max_pairs 100 \
   --method dpel \
@@ -602,7 +602,7 @@ export AZURE_OPENAI_ENDPOINT="https://your-instance.openai.azure.com/"
 export AZURE_OPENAI_DEPLOYMENT_GPT52="gpt-5.2-MBZUAI"
 
 # Then run generator
-python -m xrefrag generate --config configs/project.yaml
+python -m obliqaxref generate --config configs/project.yaml
 ```
 
 ---
@@ -626,7 +626,7 @@ Where `||` is string concatenation.
 
 **Example**:
 ```python
-from xrefrag.generate.types import make_pair_uid, ReferenceType
+from obliqaxref.generate.types import make_pair_uid, ReferenceType
 
 pair_uid = make_pair_uid(
     reference_type=ReferenceType.INTERNAL,
@@ -639,7 +639,7 @@ pair_uid = make_pair_uid(
 
 ### 2. Citation Dependency Enforcement: The Core Validation Model
 
-This is **the defining feature** of XRefRAG. Unlike standard Q&A benchmarks, XRefRAG enforces that both passages are necessary.
+This is **the defining feature** of ObliQA-XRef. Unlike standard Q&A benchmarks, ObliQA-XRef enforces that both passages are necessary.
 
 #### Conceptual Definition
 
@@ -675,7 +675,7 @@ Each bracketed tag references a `passage_uid` and marks the sentence(s) that dep
 #### Validation Gate
 
 ```python
-from xrefrag.generate.common.validate import has_required_tags
+from obliqaxref.generate.common.validate import has_required_tags
 
 # Both tags must be present and distinct
 is_valid = has_required_tags(
@@ -827,7 +827,7 @@ For each schema record with non-empty answer_spans:
 Every generated Q&A passes strict validation:
 
 ```python
-from xrefrag.generate.common.validate import validate_qa_item
+from obliqaxref.generate.common.validate import validate_qa_item
 
 result = validate_qa_item(
     qa,
@@ -966,10 +966,10 @@ The generator supports resuming interrupted runs:
 **Example**:
 ```bash
 # First run: 50 pairs, interrupted after 25
-python -m xrefrag generate --preset dev --method both
+python -m obliqaxref generate --preset dev --method both
 
 # Resume: same command
-python -m xrefrag generate --preset dev --method both
+python -m obliqaxref generate --preset dev --method both
 # Automatically skips the 25 already-processed pairs, processes remaining 25
 ```
 
@@ -1031,16 +1031,16 @@ Use **presets** and **limits** to manage cost:
 
 ```bash
 # Fast iteration (cost ~$0.50)
-python -m xrefrag generate --preset smoke --dry_run
+python -m obliqaxref generate --preset smoke --dry_run
 
 # Development (cost ~$5)
-python -m xrefrag generate --preset dev --method both
+python -m obliqaxref generate --preset dev --method both
 
 # Production (cost ~$50+)
-python -m xrefrag generate --preset paper --method both
+python -m obliqaxref generate --preset paper --method both
 
 # Custom limit (cost controlled)
-python -m xrefrag generate --max_pairs 100 --max_q_per_pair 1 --method dpel
+python -m obliqaxref generate --max_pairs 100 --max_q_per_pair 1 --method dpel
 ```
 
 ---
@@ -1054,14 +1054,14 @@ python -m xrefrag generate --max_pairs 100 --max_q_per_pair 1 --method dpel
 - Check LLM temperature (lower = more consistent): `--temperature 0.1`
 - Run with seed for reproducibility: `--seed 13`
 - Reduce `max_q_per_pair` to force stricter selection
-- Examine prompt in `src/xrefrag/generate/dpel/generate.py` (lines 50–100)
+- Examine prompt in `src/obliqaxref/generate/dpel/generate.py` (lines 50–100)
 
 ### Issue: "All pairs filtered as title targets"
 **Cause**: Corpus has many heading-like passages.
 
 **Solution**:
 ```bash
-python -m xrefrag generate --drop_title_targets false
+python -m obliqaxref generate --drop_title_targets false
 ```
 
 This disables title filtering; note that answers may be trivial for heading passages.
@@ -1072,10 +1072,10 @@ This disables title filtering; note that answers may be trivial for heading pass
 **Solution**:
 ```bash
 # Use preset to control pair count
-python -m xrefrag generate --preset dev
+python -m obliqaxref generate --preset dev
 
 # Or manually cap
-python -m xrefrag generate --max_pairs 100 --max_q_per_pair 1
+python -m obliqaxref generate --max_pairs 100 --max_q_per_pair 1
 ```
 
 ### Issue: Resume not working (reprocessing pairs)
@@ -1092,7 +1092,7 @@ touch runs/generate_ukfin/dpel/dpel.qa.jsonl
 touch runs/generate_ukfin/schema/schema.qa.jsonl
 
 # Then resume
-python -m xrefrag generate --preset dev --method both
+python -m obliqaxref generate --preset dev --method both
 ```
 
 ---
@@ -1114,6 +1114,6 @@ The generator outputs feed into the **curation module**:
 
 ## References & Documentation
 
-- **Prompt examples**: `src/xrefrag/generate/dpel/generate.py` (lines 60–140)
-- **Schema extraction**: `src/xrefrag/generate/schema/extract.py` (lines 200–400)
-- **Types**: `src/xrefrag/generate/types.py` (lines 100–200)
+- **Prompt examples**: `src/obliqaxref/generate/dpel/generate.py` (lines 60–140)
+- **Schema extraction**: `src/obliqaxref/generate/schema/extract.py` (lines 200–400)
+- **Types**: `src/obliqaxref/generate/types.py` (lines 100–200)

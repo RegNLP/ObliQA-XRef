@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-llm_test.py — XRefRAG Azure-only LLM connectivity test
+llm_test.py — ObliQA-XRef Azure-only LLM connectivity test
 
 Reads settings from .env (located next to this file) and runs:
   1) Azure OpenAI HTTP check (deployments route)
@@ -150,9 +150,9 @@ def test_azure_sdk(endpoint: str, api_key: str, api_version: str, deployment: st
 def main() -> int:
     load_env()
 
-    provider = os.getenv("XREFRAG_LLM_PROVIDER", "azure")
+    provider = os.getenv("OBLIQAXREF_LLM_PROVIDER", "azure")
     if provider.lower() != "azure":
-        print(f"ERROR: This llm_test.py is Azure-only, but XREFRAG_LLM_PROVIDER={provider!r}")
+        print(f"ERROR: This llm_test.py is Azure-only, but OBLIQAXREF_LLM_PROVIDER={provider!r}")
         return 1
 
     endpoint = normalize_azure_openai_endpoint(require_env("AZURE_OPENAI_ENDPOINT"))
@@ -160,9 +160,9 @@ def main() -> int:
     api_version = require_env("AZURE_OPENAI_API_VERSION")
     deployment = require_env("AZURE_OPENAI_DEPLOYMENT_GPT52")
 
-    print("=== XRefRAG Azure LLM Test ===")
-    print(f"XREFRAG_ENV: {os.getenv('XREFRAG_ENV', '')}")
-    print(f"XREFRAG_LOG_LEVEL: {os.getenv('XREFRAG_LOG_LEVEL', '')}")
+    print("=== ObliQA-XRef Azure LLM Test ===")
+    print(f"OBLIQAXREF_ENV: {os.getenv('OBLIQAXREF_ENV', '')}")
+    print(f"OBLIQAXREF_LOG_LEVEL: {os.getenv('OBLIQAXREF_LOG_LEVEL', '')}")
     print(f"Provider: {provider}")
     print(f"Endpoint: {endpoint}")
     print(f"API version: {api_version}")

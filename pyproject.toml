@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xrefrag"
+name = "obliqaxref"
 version = "0.1.0"
-description = "XRefRAG: Cross-reference–aware benchmark construction framework for citation-dependent RAG."
+description = "ObliQA-XRef: Cross-reference–aware benchmark construction framework for citation-dependent RAG."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
@@ -43,7 +43,7 @@ llm = [
 ]
 
 [project.scripts]
-xrefrag = "xrefrag.cli:app"
+obliqaxref = "obliqaxref.cli:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

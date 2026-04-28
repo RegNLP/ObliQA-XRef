@@ -71,7 +71,7 @@ for corpus in ["ukfin", "adgm"]:
     # After Answer: KEEP/DROP? Use answer_eval summaries for test split per method counts available via summary.total
     # We'll just report evaluated totals per method from answer_eval files
     for method in ["bm25", "e5", "rrf", "ce_rerank_union200"]:
-        p = Path("XRefRAG_Out_Datasets") / f"answer_eval_{corpus}_{method}_test.json"
+        p = Path("ObliQA-XRef_Out_Datasets") / f"answer_eval_{corpus}_{method}_test.json"
         if p.exists():
             try:
                 data = json.load(open(p))

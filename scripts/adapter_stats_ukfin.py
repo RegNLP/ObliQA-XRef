@@ -3,7 +3,7 @@ Compute statistics for UKFIN corpus and crossrefs.
 
 Usage:
     python scripts/adapter_stats_ukfin.py
-    python scripts/adapter_stats_ukfin.py --corpus data/ukfin/processed/passage_corpus.jsonl --crossref data/ukfin/processed/crossref_resolved.cleaned.csv --output data/ukfin/processed/xrefrag_stats.raw.json
+    python scripts/adapter_stats_ukfin.py --corpus data/ukfin/processed/passage_corpus.jsonl --crossref data/ukfin/processed/crossref_resolved.cleaned.csv --output data/ukfin/processed/obliqaxref_stats.raw.json
 """
 
 from __future__ import annotations

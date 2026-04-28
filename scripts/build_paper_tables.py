@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Build paper tables from XRefRAG generation stats.
+Build paper tables from ObliQA-XRef generation stats.
 
 This script orchestrates:
 1. Loading generate_report.json (with dpel_stats + schema_stats)
@@ -23,8 +23,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from xrefrag.generate.stats.generator_stats import compute_generation_stats, read_jsonl
-from xrefrag.generate.stats.tables import (
+from obliqaxref.generate.stats.generator_stats import compute_generation_stats, read_jsonl
+from obliqaxref.generate.stats.tables import (
     build_table1_corpus_pairs,
     build_table2_generation_yield,
     build_table3_qa_properties,
@@ -66,7 +66,7 @@ def write_csv(path: str, rows: list[dict[str, Any]]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Build paper tables from XRefRAG generation stats."
+        description="Build paper tables from ObliQA-XRef generation stats."
     )
     parser.add_argument(
         "--gen_report",
@@ -75,7 +75,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--adapter_stats",
-        default="data/ukfin/processed/xrefrag_stats.raw.json",
+        default="data/ukfin/processed/obliqaxref_stats.raw.json",
         help="Path to adapter stats (corpus + crossref) for Table 1",
     )
     parser.add_argument(

@@ -22,7 +22,7 @@
     "crossref_csv": "data/ukfin/processed/crossref_resolved.csv",
     "cleaned_csv": "data/ukfin/processed/crossref_resolved.cleaned.csv",
     "cleaning_report_json": "data/ukfin/processed/cleaning_report.json",
-    "stats_json": "data/ukfin/processed/xrefrag_stats.raw.json"
+    "stats_json": "data/ukfin/processed/obliqaxref_stats.raw.json"
   },
   "discovery": {},
   "download": {},

@@ -14,7 +14,7 @@ This tests genuine cross-document reasoning, not trivial single-passage answerab
 
 ```bash
 # 1. Clone and setup
-git clone https://github.com/RegNLP/ObliQA-XRef.git && cd XRefRag
+git clone https://github.com/RegNLP/ObliQA-XRef.git && cd ObliQA-XRef
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -22,16 +22,16 @@ pip install -e ".[dev]"
 vim configs/project.yaml
 
 # 3. Run complete pipeline
-python -m xrefrag adapter --config configs/project.yaml
-python -m xrefrag generate --config configs/project.yaml
-python -m xrefrag curate --config configs/project.yaml
+python -m obliqaxref adapter --config configs/project.yaml
+python -m obliqaxref generate --config configs/project.yaml
+python -m obliqaxref curate --config configs/project.yaml
 
 # 4. View results
 python scripts/generate_stats.py
 python scripts/curate_stats.py
 ```
 
-**First time?** Try the smoke test: `python -m xrefrag generate --config configs/project.yaml --preset smoke`
+**First time?** Try the smoke test: `python -m obliqaxref generate --config configs/project.yaml --preset smoke`
 
 ---
 
@@ -62,12 +62,12 @@ A four-stage pipeline that transforms regulatory documents into high-quality, ci
 ### Setup
 
 ```bash
-git clone https://github.com/RegNLP/XRefRag.git
-cd XRefRag
+git clone https://github.com/RegNLP/ObliQA-XRef.git
+cd ObliQA-XRef
 python -m venv .venv
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 pip install -e ".[dev]"
-python -m xrefrag --help   # Verify
+python -m obliqaxref --help   # Verify
 ```
 
 ---
@@ -105,9 +105,9 @@ See [configs/project.yaml](configs/project.yaml) for complete reference with all
 ### Standard Pipeline
 
 ```bash
-python -m xrefrag adapter --config configs/project.yaml
-python -m xrefrag generate --config configs/project.yaml
-python -m xrefrag curate --config configs/project.yaml
+python -m obliqaxref adapter --config configs/project.yaml
+python -m obliqaxref generate --config configs/project.yaml
+python -m obliqaxref curate --config configs/project.yaml
 python scripts/generate_stats.py && python scripts/curate_stats.py
 ```
 
@@ -118,53 +118,53 @@ The evaluation module provides intrinsic stats and downstream evaluation (IR, an
 Quick end-to-end (dev scale):
 ```
 # finalize → stats → humaneval → (IR+Answer)
-python -m xrefrag.eval.cli pipeline
+python -m obliqaxref.eval.cli pipeline
 
 # evaluate generated answers (all corpora + methods)
-python -m xrefrag.eval.cli answer-eval
+python -m obliqaxref.eval.cli answer-eval
 ```
 
 Run individual evaluation steps:
 ```
-# IR evaluation on test split (writes XRefRAG_Out_Datasets/ir_eval_{corpus}_test.json)
-python -m xrefrag.eval.cli ir --corpus both --k 10
+# IR evaluation on test split (writes ObliQA-XRef_Out_Datasets/ir_eval_{corpus}_test.json)
+python -m obliqaxref.eval.cli ir --corpus both --k 10
 
 # Answer generation for test split
 # - Uses ONLY retrieved passages (no SOURCE/TARGET roles)
 # - Answers are concise (≈90–140 words) and cite used passages with [#ID:PASSAGE_ID]
-# - Writes: XRefRAG_Out_Datasets/answer_gen_{corpus}_{subset}_{method}_test.json
-python -m xrefrag.eval.cli answer --corpus both --methods bm25 e5 rrf ce_rerank_union200
+# - Writes: ObliQA-XRef_Out_Datasets/answer_gen_{corpus}_{subset}_{method}_test.json
+python -m obliqaxref.eval.cli answer --corpus both --methods bm25 e5 rrf ce_rerank_union200
 
 # Answer evaluation
 # - Structural: ID-tag presence/alignment with retrieved docids, length, ROUGE-L (LCS), passage overlap, citation-like violations
 # - GPT: answer_relevance and answer_faithfulness (0–1) via Azure deployment
 # - NLI: external CrossEncoder by default; GPT NLI fallback
-# - Writes per subset×method: XRefRAG_Out_Datasets/answer_eval_{corpus}_{subset}_{method}_test.json
-# - Also writes compact CSV per corpus: XRefRAG_Out_Datasets/answer_eval_{corpus}_compact.csv
-python -m xrefrag.eval.cli answer-eval
+# - Writes per subset×method: ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_{subset}_{method}_test.json
+# - Also writes compact CSV per corpus: ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_compact.csv
+python -m obliqaxref.eval.cli answer-eval
 ```
 
-Outputs live under `XRefRAG_Out_Datasets/` (finalized datasets, IR runs, generated answers, evaluated answers) and `runs/stats/eval/` (resource stats).
+Outputs live under `ObliQA-XRef_Out_Datasets/` (finalized datasets, IR runs, generated answers, evaluated answers) and `runs/stats/eval/` (resource stats).
 
 Combined generator+evaluator (direct runner):
 ```
-python src/xrefrag/eval/DownstreamEval/answer_gen_eval.py \
-  --corpus both --subset both --k 10 --root XRefRAG_Out_Datasets \
+python src/obliqaxref/eval/DownstreamEval/answer_gen_eval.py \
+  --corpus both --subset both --k 10 --root ObliQA-XRef_Out_Datasets \
   --method all --model gpt-5.2-MBZUAI --eval
 ```
 
 ### Quick Test
 ```bash
-python -m xrefrag generate --config configs/project.yaml --preset smoke
+python -m obliqaxref generate --config configs/project.yaml --preset smoke
 ```
 
 ### Development Mode
 ```bash
 # Limited generation
-python -m xrefrag generate --config configs/project.yaml --max-pairs 50
+python -m obliqaxref generate --config configs/project.yaml --max-pairs 50
 
 # Skip answer validation
-python -m xrefrag curate --config configs/project.yaml --skip-answer
+python -m obliqaxref curate --config configs/project.yaml --skip-answer
 ```
 
 ---
@@ -268,8 +268,8 @@ Result: Questions naturally requiring cross-document reasoning.
 ## Dataset Naming Note
 
 **In research papers**, the released datasets are referred to as:
-- **XRefRAG-FSRA** (Financial Services Regulatory Authority corpus from ADGM)
-- **XRefRAG-UKFin** (UK PRA Rulebook corpus)
+- **ObliQA-XRef-FSRA** (Financial Services Regulatory Authority corpus from ADGM)
+- **ObliQA-XRef-UKFin** (UK PRA Rulebook corpus)
 
 **In the codebase and configs**, use the corpus keys:
 - `adgm` for FSRA/ADGM
@@ -280,7 +280,7 @@ Result: Questions naturally requiring cross-document reasoning.
 ## Project Structure
 
 ```
-XRefRag/
+ObliQA-XRef/
 ├── README.md                          # This file
 ├── LICENSE                            # MIT License
 ├── pyproject.toml                     # Package config
@@ -290,7 +290,7 @@ XRefRag/
 │   ├── adapter/README.md              # Adapter guide
 │   ├── generator/README.md            # Generator guide
 │   └── curation/README.md             # Curation guide
-├── src/xrefrag/
+├── src/obliqaxref/
 │   ├── adapter/                       # Extraction + normalization
 │   ├── generate/                      # Schema + DPEL generation
 │   ├── curate/                        # IR, voting, judge
@@ -329,19 +329,19 @@ python scripts/curate_stats.py
 ### Run Individual Stages
 ```bash
 # Adapter only
-python -m xrefrag adapter --config configs/project.yaml --log-level INFO
+python -m obliqaxref adapter --config configs/project.yaml --log-level INFO
 
 # Generate with smoke test (fast)
-python -m xrefrag generate --config configs/project.yaml --preset smoke
+python -m obliqaxref generate --config configs/project.yaml --preset smoke
 
 # Generate with development settings (50 pairs)
-python -m xrefrag generate --config configs/project.yaml --max-pairs 50
+python -m obliqaxref generate --config configs/project.yaml --max-pairs 50
 
 # Curate with all substeps
-python -m xrefrag curate --config configs/project.yaml
+python -m obliqaxref curate --config configs/project.yaml
 
 # Curate without answer validation
-python -m xrefrag curate --config configs/project.yaml --skip-answer
+python -m obliqaxref curate --config configs/project.yaml --skip-answer
 ```
 
 ---
@@ -391,4 +391,4 @@ We welcome contributions! Please submit issues and pull requests.
 
 ## Support
 
-For questions or issues, open a GitHub issue on the [XRefRag repository](https://github.com/RegNLP/XRefRag).
+For questions or issues, open a GitHub issue on the [ObliQA-XRef repository](https://github.com/RegNLP/ObliQA-XRef).

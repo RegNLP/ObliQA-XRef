@@ -2,7 +2,7 @@
 """
 Summarize IR and Answer evaluation results into CSV tables.
 
-Inputs (expected under XRefRAG_Out_Datasets/):
+Inputs (expected under ObliQA-XRef_Out_Datasets/):
 - ir_eval_{corpus}_test.json
 - answer_eval_{corpus}_{method}_test.json
 
@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-ROOT = Path("XRefRAG_Out_Datasets")
+ROOT = Path("ObliQA-XRef_Out_Datasets")
 
 IR_KEYS = [
     "Recall@10",

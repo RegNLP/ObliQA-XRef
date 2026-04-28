@@ -2,10 +2,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "xrefrag generate (smoke)",
+            "name": "obliqaxref generate (smoke)",
             "type": "python",
             "request": "launch",
-            "module": "xrefrag.cli",
+            "module": "obliqaxref.cli",
             "args": [
                 "generate",
                 "-c",

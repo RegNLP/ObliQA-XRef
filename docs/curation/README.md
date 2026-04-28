@@ -1,4 +1,4 @@
-# XRefRAG Curation (Strict Citation-Dependent)
+# ObliQA-XRef Curation (Strict Citation-Dependent)
 
 Authoritative guide for the curation stage: inputs, steps, outputs, config, guardrails, and strict citation-dependency rules. Curation filters generator outputs with IR agreement, judges borderlines with an LLM, and (optionally) validates answers. Any item whose source passage alone answers the question must DROP with `QP_NOT_CIT_DEP`.
 
@@ -87,10 +87,10 @@ Decision audit schema (`decisions.jsonl`): `item_id`, `source_passage_id`, `targ
 ### Typical (IR → vote → judge → answer)
 
 ```bash
-python -m xrefrag.curate.cli ir \
+python -m obliqaxref.curate.cli ir \
   --config configs/project.yaml
 
-python -m xrefrag.curate.cli vote \
+python -m obliqaxref.curate.cli vote \
   --config configs/project.yaml
 ```
 
@@ -99,13 +99,13 @@ See [configs/project.yaml](../../configs/project.yaml) for all available configu
 ### Voting only (IR already present)
 
 ```bash
-python -m xrefrag.curate.cli vote --config configs/project.yaml
+python -m obliqaxref.curate.cli vote --config configs/project.yaml
 ```
 
 ### Full fleet helper (all corpora/methods)
 
 ```bash
-python src/xrefrag/curate/run_full_pipeline.py
+python src/obliqaxref/curate/run_full_pipeline.py
 ```
 
 ### Useful overrides (CLI via CurateOverrides)
