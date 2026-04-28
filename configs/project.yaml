@@ -52,7 +52,7 @@ adapter:
   corpus: ukfin
 
   # Document source list (corpus-specific)
-  sources: [pra_rulebook]
+  sources: [ pra_rulebook ]
 
   # Passage extraction level
   passage_level: paragraph
@@ -66,7 +66,7 @@ adapter:
   seed: 42
 
   # Pipeline stages to run
-  stages: [download, corpus, crossref, clean, stats]
+  stages: [ download, corpus, crossref, clean, stats ]
 
   # Legacy field (kept for compatibility)
   passage_unit_policy: canonical
@@ -79,22 +79,21 @@ adapter:
   pra:
     base_url: "https://www.prarulebook.co.uk/"
     allowlist_urls_path: "data/ukfin/allowlists/pra_urls.txt"
-    discovery_index_paths: ["/pra-rules", "/guidance"]
+    discovery_index_paths: [ "/pra-rules", "/guidance" ]
     user_agent: "Mozilla/5.0 (compatible; ObliQA-XRef/1.0)"
     sleep_seconds: 0.3
-
   # ADGM-specific (if needed, currently file-based)
   # No additional config required for ADGM
 
-# =============================================================================
-# GENERATION (Stage 2: Q&A Generation)
-# =============================================================================
+  # =============================================================================
+  # GENERATION (Stage 2: Q&A Generation)
+  # =============================================================================
 generation:
   # Generation methods to use
-  methods: [dpel, schema]
+  methods: [ dpel, schema ]
 
   # Question personas (style variation)
-  personas: [basic, professional]
+  personas: [ basic, professional ]
 
   # Pair limits (0 = all)
   max_edges: 0
@@ -146,7 +145,7 @@ judge:
 
   # Legacy fields (kept for compatibility)
   score_threshold: 7.0
-  borderline_band: [6.5, 7.5]
+  borderline_band: [ 6.5, 7.5 ]
   adaptive_repeats: 2
 
 # =============================================================================
@@ -164,7 +163,7 @@ curation:
     drop_threshold: 2 # Either src or tgt has ≤2 votes → DROP
 
     # IR retrievers (must match available runs)
-    retrievers: [bm25, ft_e5, rrf_bm25_e5, ce_rerank_union200]
+    retrievers: [ bm25, ft_e5, rrf_bm25_e5, ce_rerank_union200 ]
 
     # IR method (majority_voting is default)
     ir_method: majority_voting
@@ -182,6 +181,7 @@ curation:
     num_judge_passes: 1
     temperature: 0.0
     rate_limit_delay: 0.1
+
 # =============================================================================
 # ANSWER VALIDATION (Optional Stage 4)
 # =============================================================================
