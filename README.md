@@ -12,15 +12,15 @@ The benchmark focuses on items where the source passage is relevant but insuffic
 
 1. **Adapter**: normalize corpus passages and resolve source→target cross-references.
 2. **Generate**: create DPEL and SCHEMA QA candidates from cross-reference pairs.
-3. **Curate**: run diagnostic retrieval, strict judge v2 citation-dependency filtering, and answer validation.
-4. **Finalize/Evaluate**: export answer-valid benchmark splits, run retrieval/answer diagnostics, and produce analysis tables.
+3. **Curate**: run diagnostic retrieval, strict judge v2 citation-dependency filtering (final selector), and optional answer validation (diagnostic only).
+4. **Finalize/Evaluate**: export dependency-valid (judge PASS) benchmark splits by default, run retrieval/answer diagnostics, and produce analysis tables.
 
 Current curation policy:
 
 - IR agreement is **diagnostic only**.
 - `dependency-valid` = judge PASS.
 - `answer-valid` = judge PASS ∩ answer PASS.
-- Experimental final exports default to `answer-valid`.
+- Final benchmark defaults to `dependency-valid` (judge PASS).
 - Dependency-valid but answer-failed items are retained separately for diagnosis.
 
 ## Key Outputs
@@ -53,7 +53,7 @@ Run the main stages:
 python -m obliqaxref adapter --config configs/project.yaml
 python -m obliqaxref generate --config configs/project.yaml
 python -m obliqaxref curate --config configs/project.yaml
-python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
+python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid
 ```
 
 Corpus-specific dev configs are available in `configs/adgm_dev.yaml` and `configs/ukfin_dev.yaml`.
@@ -106,7 +106,7 @@ The current curation stage:
 - Assigns `ir_difficulty_label` as metadata only.
 - Sends all eligible generated items to the judge.
 - Uses judge schema v2 fields for source relevance, target relevance, source insufficiency, target necessity, answer support, and citation dependency.
-- Uses answer validation to control membership in `final_answer_valid`.
+- Answer validation is optional and produces diagnostic subsets `final_answer_valid` and `final_answer_failed` (it does not control the default final benchmark).
 
 Examples:
 
@@ -148,8 +148,8 @@ Standard metrics such as Recall@k, MAP@k, and nDCG@k are preserved.
 Examples:
 
 ```bash
-# Finalize answer-valid cohort for experiments
-python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
+# Finalize dependency-valid cohort (judge PASS) for experiments
+python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid
 
 # IR evaluation
 python -m obliqaxref.eval.cli ir --corpus both --k 10
@@ -168,9 +168,9 @@ See [docs/eval/README.md](docs/eval/README.md).
 python -m obliqaxref.eval.cli answer-quality-by-retrieval \
   --root ObliQA-XRef_Out_Datasets
 
-# Human audit sample export
+# Human audit sample export (you may also sample from final_dependency_valid.jsonl)
 python -m obliqaxref.eval.cli human-audit-export \
-  --input runs/curate_adgm/out/final_answer_valid.jsonl runs/curate_ukfin/out/final_answer_valid.jsonl \
+  --input runs/curate_adgm/out/final_dependency_valid.jsonl runs/curate_ukfin/out/final_dependency_valid.jsonl \
   --out ObliQA-XRef_Out_Datasets \
   --n 200 --seed 13
 
@@ -179,10 +179,8 @@ python -m obliqaxref.eval.cli human-audit-aggregate \
   --inputs annotations_1.csv annotations_2.csv \
   --out ObliQA-XRef_Out_Datasets
 
-# Benchmark statistics and paper-ready tables
-python -m obliqaxref.eval.cli benchmark-statistics \
-  --input runs/curate_adgm/out/final_answer_valid.jsonl runs/curate_ukfin/out/final_answer_valid.jsonl \
-  --out ObliQA-XRef_Out_Datasets
+# Benchmark statistics and paper-ready tables (defaults to dependency_valid when inputs omitted)
+python -m obliqaxref.eval.cli benchmark-statistics --out ObliQA-XRef_Out_Datasets
 ```
 
 ## Project Structure
@@ -204,10 +202,11 @@ runs/                    local pipeline outputs
 
 | Issue | Check |
 | --- | --- |
-| Missing final items | Confirm judge PASS and answer PASS files exist under `curate_judge/` and `curate_answer/`. |
+| Missing final items | Confirm judge PASS exists under `curate_judge/`. Answer PASS is optional and diagnostic. |
 | Unexpected low retrieval agreement | IR is diagnostic; inspect `ir_difficulty_label` and pair metrics rather than dropping items. |
 | CE reranker errors | Confirm `sentence_transformers` dependencies and model availability. |
 | Missing XRefExpand runs | Confirm `crossref_resolved.cleaned.csv` exists and base TREC runs were written. |
+| Judge dropped all items due to missing text | Check `curated_items.judge.jsonl` for `source_text`/`target_text`. Curation attaches texts using passage IDs via `pid`/`passage_uid`/`passage_id`/`id` and text via `text`/`passage`/`content`. If `generator/passages_index.jsonl` is empty, the judge falls back to the adapter corpus automatically. |
 | Missing answer-quality joins | Confirm `retrieval_diagnostics_per_query.csv` and `answer_eval_*_test.json` are under the same root. |
 
 ## License

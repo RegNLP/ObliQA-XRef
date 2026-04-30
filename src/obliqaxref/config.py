@@ -160,7 +160,7 @@ class CurationConfig(BaseModel):
     ir_agreement: IRAgreementConfig = Field(default_factory=IRAgreementConfig)
     judge: JudgeConfig = Field(default_factory=JudgeConfig)
     final_export_basis: str = Field(
-        "answer_valid",
+        "dependency_valid",
         description="Final compatibility export basis: dependency_valid | answer_valid",
     )
 

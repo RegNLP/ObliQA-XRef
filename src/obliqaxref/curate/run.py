@@ -57,14 +57,28 @@ def load_items(items_file: Path) -> list[dict[str, Any]]:
 
 
 def load_passages(passages_file: Path) -> dict[str, dict[str, Any]]:
-    """Load passages from JSONL file."""
-    passages = {}
-    with open(passages_file) as f:
-        for line in f:
-            p = json.loads(line)
-            pid = p.get("passage_id")
-            if pid:
-                passages[pid] = p
+    """Load passages from JSONL file and index by multiple possible ID keys.
+
+    Index keys (if present): pid, passage_uid, passage_id, id
+    The stored value is the original row dict.
+    """
+    passages: dict[str, dict[str, Any]] = {}
+    try:
+        with open(passages_file, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    p = json.loads(line)
+                except Exception:
+                    continue
+                for k in ("pid", "passage_uid", "passage_id", "id"):
+                    v = p.get(k)
+                    if v:
+                        passages[str(v)] = p
+    except FileNotFoundError:
+        pass
     return passages
 
 
@@ -701,11 +715,16 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
         # All items proceed to citation-dependency judge regardless of IR outcome
         curated_item["decision_ir"] = "JUDGE_IR"
 
-        # Attach passage text if available
-        if item["source_passage_id"] in passages:
-            curated_item["source_text"] = passages[item["source_passage_id"]].get("passage", "")
-        if item["target_passage_id"] in passages:
-            curated_item["target_text"] = passages[item["target_passage_id"]].get("passage", "")
+        # Attach passage text if available (support multiple field names)
+        def _get_text(p: dict[str, Any] | None) -> str:
+            if not p:
+                return ""
+            return (
+                str(p.get("text") or p.get("passage") or p.get("content") or "").strip()
+            )
+
+        curated_item["source_text"] = _get_text(passages.get(item["source_passage_id"]))
+        curated_item["target_text"] = _get_text(passages.get(item["target_passage_id"]))
 
         all_items_annotated.append(curated_item)
 

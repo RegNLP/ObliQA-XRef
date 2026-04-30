@@ -1,3 +1,81 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from obliqaxref.curate.run import assemble_final_benchmark
+
+
+def _writelines(path: Path, rows: list[dict]):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r) + "\n")
+
+
+def test_assemble_dependency_valid_without_answer(tmp_path: Path):
+    out = tmp_path / "out"
+    items = tmp_path / "items.jsonl"
+
+    # Judge PASS ids
+    judge_pass = [
+        {"item_id": "A", "decision_qp_final": "PASS_QP"},
+        {"item_id": "B", "decision_qp_final": "PASS_QP"},
+    ]
+    _writelines(out / "curate_judge" / "judge_responses_pass.jsonl", judge_pass)
+
+    # No answer files present (simulate skipped answer validation)
+
+    # items file with minimal fields
+    _writelines(
+        items,
+        [
+            {"item_id": "A", "question": "qA", "gold_answer": "aA", "source_passage_id": "s1", "target_passage_id": "t1"},
+            {"item_id": "B", "question": "qB", "gold_answer": "aB", "source_passage_id": "s2", "target_passage_id": "t2"},
+        ],
+    )
+
+    stats = assemble_final_benchmark(out, items, final_export_basis="dependency_valid")
+    assert stats["final_dependency_valid_count"] == 2
+    assert stats["final_answer_valid_count"] == 0
+    # final_benchmark should equal dependency_valid by default here
+    assert stats["total_final"] == 2
+    # And the alias file should contain both items
+    fb = (out / "final_benchmark.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(fb) == 2
+
+
+def test_assemble_dependency_valid_with_answer_results(tmp_path: Path):
+    out = tmp_path / "out"
+    items = tmp_path / "items.jsonl"
+
+    judge_pass = [
+        {"item_id": "A", "decision_qp_final": "PASS_QP"},
+        {"item_id": "B", "decision_qp_final": "PASS_QP"},
+    ]
+    ans_pass = [{"item_id": "A", "decision_ans_final": "PASS_ANS"}]
+    ans_drop = [{"item_id": "B", "decision_ans_final": "DROP_ANS"}]
+
+    _writelines(out / "curate_judge" / "judge_responses_pass.jsonl", judge_pass)
+    _writelines(out / "curate_answer" / "answer_responses_pass.jsonl", ans_pass)
+    _writelines(out / "curate_answer" / "answer_responses_drop.jsonl", ans_drop)
+
+    _writelines(
+        items,
+        [
+            {"item_id": "A", "question": "qA", "gold_answer": "aA", "source_passage_id": "s1", "target_passage_id": "t1"},
+            {"item_id": "B", "question": "qB", "gold_answer": "aB", "source_passage_id": "s2", "target_passage_id": "t2"},
+        ],
+    )
+
+    stats = assemble_final_benchmark(out, items, final_export_basis="dependency_valid")
+    # All judge PASS items in final_benchmark
+    assert stats["final_dependency_valid_count"] == 2
+    assert stats["final_answer_valid_count"] == 1
+    assert stats["final_answer_failed_count"] == 1
+    assert stats["total_final"] == 2
+    fb = (out / "final_benchmark.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(fb) == 2
 # tests/test_assemble_final_benchmark.py
 """
 Unit tests for final-benchmark assembly.
@@ -7,8 +85,6 @@ Covers:
 - assemble_final_benchmark(): JSONL / CSV output, hard-cases split, stats
 - Edge cases: empty inputs, missing files, all-challenging, all-retrievable
 """
-
-from __future__ import annotations
 
 import csv
 import json

@@ -10,13 +10,14 @@ python -m obliqaxref.eval.cli --help
 
 ## Finalization
 
-The default experimental cohort is `answer_valid`.
+The default final cohort is `dependency_valid` (judge PASS). Answer validation cohorts are optional diagnostics.
 
 ```bash
-python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
+python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid
 ```
 
-This reads `runs/curate_<corpus>/out/final_answer_valid.jsonl` and writes:
+This reads the selected cohort file under `runs/curate_<corpus>/out/`.
+With the default `dependency_valid`, it reads `final_dependency_valid.jsonl` and writes:
 
 ```text
 ObliQA-XRef_Out_Datasets/

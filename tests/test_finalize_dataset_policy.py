@@ -6,6 +6,46 @@ from pathlib import Path
 from obliqaxref.eval.FinalizeDataset.finalize_dataset import finalize_dataset_main
 
 
+def _writelines(path: Path, rows: list[dict]):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r) + "\n")
+
+
+def test_finalize_from_dependency_valid(tmp_path: Path, monkeypatch):
+    # Simulate curated outputs
+    curate_out = tmp_path / "runs" / "curate_adgm" / "out"
+    dep_rows = [
+        {"item_id": "A", "question": "qA", "gold_answer": "aA", "source_passage_id": "s1", "target_passage_id": "t1"},
+        {"item_id": "B", "question": "qB", "gold_answer": "aB", "source_passage_id": "s2", "target_passage_id": "t2"},
+    ]
+    _writelines(curate_out / "final_dependency_valid.jsonl", dep_rows)
+
+    # Capture outputs under a temp datasets dir
+    out_dir = tmp_path / "datasets"
+
+    # Run finalize for ADGM dependency_valid
+    cwd = Path.cwd()
+    try:
+        # change CWD so finalize uses relative 'runs/curate_*/out'
+        monkeypatch.chdir(tmp_path)
+        finalize_dataset_main(out_dir=str(out_dir), corpus="adgm", cohort="dependency_valid", seed=1)
+    finally:
+        monkeypatch.chdir(cwd)
+
+    # Verify combined ALL exists and has both items
+    full = out_dir / "ObliQA-XRef-ADGM-ALL.jsonl"
+    assert full.exists()
+    lines = full.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+
+import json
+from pathlib import Path
+
+from obliqaxref.eval.FinalizeDataset.finalize_dataset import finalize_dataset_main
+
+
 def _write_jsonl(path: Path, records: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:

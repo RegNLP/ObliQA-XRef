@@ -47,7 +47,7 @@ judge:
   adaptive_repeats: 2
 
 curation:
-  final_export_basis: answer_valid
+  final_export_basis: dependency_valid
   ir_agreement:
     top_k: 20
     keep_threshold: 4

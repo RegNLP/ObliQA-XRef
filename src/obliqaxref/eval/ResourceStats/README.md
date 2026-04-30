@@ -28,11 +28,11 @@ python -m obliqaxref.eval.cli benchmark-statistics \
   --out ObliQA-XRef_Out_Datasets
 ```
 
-That command reads final cohort files:
-
-- `final_dependency_valid.jsonl`
-- `final_answer_valid.jsonl`
-- `final_answer_failed.jsonl`
+That command reads final cohort files (default primary cohort is dependency-valid):
+  
+  - `final_dependency_valid.jsonl` (primary)
+  - `final_answer_valid.jsonl` (optional diagnostic subset)
+  - `final_answer_failed.jsonl` (optional diagnostic subset)
 
 and writes:
 

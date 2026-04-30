@@ -182,7 +182,7 @@ judge:
 curation:
   # Which curated cohort should compatibility files final_benchmark.* expose.
   # Explicit cohorts are always written as final_dependency_valid.* and final_answer_valid.*.
-  final_export_basis: answer_valid
+  final_export_basis: dependency_valid
 
   # IR ensemble agreement policy
   ir_agreement:

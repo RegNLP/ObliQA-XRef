@@ -5,8 +5,8 @@ The judge module implements the strict citation-dependency filter used by ObliQA
 Current policy:
 
 - All eligible generated items are judged; IR agreement is diagnostic metadata only.
-- Judge PASS items form the `dependency-valid` cohort.
-- Answer validation is separate and controls the `answer-valid` cohort.
+- Judge PASS items form the `dependency-valid` cohort and define the default final benchmark.
+- Answer validation is optional and writes diagnostic cohorts (`final_answer_valid`, `final_answer_failed`); it does not control the default final benchmark.
 - Borderline cases should fail unless citation dependency is clear.
 
 ## Inputs
@@ -99,5 +99,5 @@ python -m obliqaxref curate --config configs/ukfin_dev.yaml
 ## Notes
 
 - Failed LLM calls and invalid JSON are handled conservatively.
-- Judge output is not the final experimental cohort by itself; final answer-valid export requires judge PASS ∩ answer PASS.
+- Judge PASS defines the default experimental cohort (dependency-valid). Answer-valid remains an optional diagnostic subset (judge PASS ∩ answer PASS) for analyses that require stricter filtering.
 - IR labels such as `easy`, `hard`, or `neither` do not determine judge eligibility.

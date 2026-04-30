@@ -11,8 +11,8 @@ python -m obliqaxref.eval.cli --help
 ## Commands
 
 ```bash
-# Finalize answer-valid benchmark splits
-python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
+# Finalize dependency-valid (judge PASS) benchmark splits
+python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid
 
 # Retrieval evaluation with pair-level diagnostics
 python -m obliqaxref.eval.cli ir --corpus both --k 10

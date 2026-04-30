@@ -1215,9 +1215,9 @@ The generator outputs feed into the **curation module**:
 
 **Tasks in curation**:
 - Add diagnostic IR difficulty metadata.
-- Apply judge v2 citation-dependency filtering.
-- Apply answer validation for answer-valid export.
-- Write `final_dependency_valid`, `final_answer_valid`, and `final_answer_failed` cohorts.
+- Apply judge v2 citation-dependency filtering (defines `dependency-valid`, the default final benchmark).
+- Optionally run answer validation for diagnostic subsets (`final_answer_valid`, `final_answer_failed`).
+- Write `final_dependency_valid` (primary), plus optional diagnostic cohorts.
 
 ---
 

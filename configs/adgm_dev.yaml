@@ -17,14 +17,14 @@ adapter:
   subset_docs: null
   subset_strategy: sorted_first_n
   seed: 42
-  stages: [download, corpus, crossref, clean, stats]
+  stages: [ download, corpus, crossref, clean, stats ]
   passage_unit_policy: canonical
   manifest_path: null
   clean_top_k: 0
 
 generation:
-  methods: [dpel, schema]
-  personas: [basic, professional]
+  methods: [ dpel, schema ]
+  personas: [ basic, professional ]
   max_edges: 0
   qas_per_edge: 1
   llm_backend: azure
@@ -37,17 +37,17 @@ judge:
   temperature: 0.0
   rate_limit_delay: 0.1
   score_threshold: 7.0
-  borderline_band: [6.5, 7.5]
+  borderline_band: [ 6.5, 7.5 ]
   adaptive_repeats: 2
 
 curation:
-  final_export_basis: answer_valid
+  final_export_basis: dependency_valid
   ir_agreement:
     top_k: 20
     keep_threshold: 4
     judge_threshold: 3
     drop_threshold: 2
-    retrievers: [bm25, ft_e5, rrf_bm25_e5, ce_rerank_union200]
+    retrievers: [ bm25, ft_e5, rrf_bm25_e5, ce_rerank_union200 ]
     ir_method: majority_voting
     rrf_k: 60
     agreement_threshold: 0.8
@@ -66,7 +66,7 @@ curation:
     rate_limit_delay: 0.1
 
 evaluation:
-  ks: [10, 20]
+  ks: [ 10, 20 ]
   citation_diagnostics: true
 
 reporting:

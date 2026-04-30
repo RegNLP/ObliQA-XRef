@@ -125,9 +125,9 @@ def main():
     )
     finalize_parser.add_argument(
         "--cohort",
-        default="answer_valid",
+        default="dependency_valid",
         choices=["answer_valid", "dependency_valid", "answer_pass", "keep_judgepass"],
-        help="Which curated cohort to finalize (default: answer_valid)",
+        help="Which curated cohort to finalize (default: dependency_valid)",
     )
     finalize_parser.add_argument(
         "--seed",

@@ -432,6 +432,11 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
         pairs = pairs[: o.max_pairs]
     logger.info("Final pairs to process: %d", len(pairs))
 
+    # Reference text lookup for leakage annotation (used by both DPEL and SCHEMA paths)
+    # Define this upfront so SCHEMA-only runs (or when DPEL is skipped) don't hit
+    # an UnboundLocalError when annotating citation leakage.
+    pair_ref_lookup: dict[str, str | None] = {p.pair_uid: p.reference_text for p in pairs}
+
     # =========================================================================
     # CACHING: Load previously generated QAs to avoid re-running same pairs
     # =========================================================================
@@ -532,8 +537,12 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
         logger.info("Wrote: %s", report_path)
         return
 
-    # LLM client
-    client, default_model = build_client()
+    # LLM client — respect configured backend (e.g., 'azure' | 'openai')
+    try:
+        provider = getattr(cfg.generation, "llm_backend", None)
+    except Exception:
+        provider = None
+    client, default_model = build_client(provider=provider)
     effective_model = o.model or default_model
 
     # =========================================================================

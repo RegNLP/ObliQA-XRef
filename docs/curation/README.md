@@ -5,7 +5,7 @@ Curation turns generated DPEL/SCHEMA candidates into explicit benchmark cohorts.
 - IR is **diagnostic only**.
 - `dependency-valid` = judge PASS.
 - `answer-valid` = judge PASS ∩ answer PASS.
-- Experimental final exports default to `answer-valid`.
+- Final benchmark defaults to `dependency-valid` (judge PASS).
 - Dependency-valid but answer-failed items are exported separately for diagnosis.
 
 ## Pipeline
@@ -21,10 +21,10 @@ Curation turns generated DPEL/SCHEMA candidates into explicit benchmark cohorts.
    - Borderline cases fail unless citation dependency is clear.
    - Writes PASS/DROP judge records.
 
-3. **Answer validation**
-   - Runs on judge PASS items.
-   - Controls membership in `final_answer_valid`.
-   - Failed answers are retained in `final_answer_failed`.
+3. **Answer validation (optional; diagnostic only)**
+   - Runs on judge PASS items when enabled.
+   - Writes diagnostic cohorts `final_answer_valid` and `final_answer_failed`.
+   - Does not control membership in the default final benchmark.
 
 4. **Final cohort assembly**
    - Writes explicit final cohort files and compatibility aliases.
@@ -62,7 +62,7 @@ final_hard.csv
 final_benchmark_stats.json
 ```
 
-`final_benchmark.*` is a compatibility alias controlled by `curation.final_export_basis`; the default downstream basis is `answer_valid`.
+`final_benchmark.*` is a compatibility alias controlled by `curation.final_export_basis`; the default downstream basis is `dependency_valid` (judge PASS). `final_answer_valid`/`final_answer_failed` are optional diagnostic subsets when answer validation is run.
 
 ## IR Difficulty Metadata
 
@@ -139,3 +139,4 @@ Legacy IR threshold fields may still exist for compatibility, but current final 
 - If hard cases disappear, check answer validation. Hard judge PASS + answer PASS items should remain in `final_answer_valid`.
 - If `final_benchmark` differs from expected, check `curation.final_export_basis`.
 - Use the explicit `final_*` cohort files as finalization inputs in the current policy.
+ - If judge drops everything due to missing passage texts, verify `source_text`/`target_text` are present in `curated_items.judge.jsonl`. Curation attaches texts using IDs via `pid`/`passage_uid`/`passage_id`/`id` and text via `text`/`passage`/`content`. If `generator/passages_index.jsonl` is empty, the judge will fall back to the adapter corpus automatically.

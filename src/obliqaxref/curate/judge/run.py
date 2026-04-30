@@ -770,16 +770,51 @@ def run_judge(cfg: RunConfig) -> None:
         logger.info("Loading passages_index from: %s", passages_file)
         with open(passages_file, encoding="utf-8") as f:
             for line in f:
-                p = json.loads(line)
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    p = json.loads(line)
+                except Exception:
+                    continue
+                # Expect passage_uid in the index; keep as-is
                 pid = p.get("passage_uid")
                 if pid:
-                    passages[pid] = p
+                    passages[str(pid)] = p
         logger.info("Loaded %d passages from passages_index", len(passages))
     else:
         logger.warning(
             "passages_index not found at %s. Judge will evaluate with empty passages.",
             passages_file,
         )
+
+    # Fallback: if index exists but yielded 0 passages, try adapter corpus as a source of text
+    if len(passages) == 0:
+        corpus_path = Path(cfg.paths.input_dir) / "passage_corpus.jsonl"
+        if corpus_path.exists():
+            try:
+                logger.info("Passages index empty; loading corpus for fallback: %s", corpus_path)
+                with open(corpus_path, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            row = json.loads(line)
+                        except Exception:
+                            continue
+                        # Build a minimal entry with a resolved 'text' field and index by multiple IDs
+                        text_val = (
+                            row.get("text") or row.get("passage") or row.get("content") or ""
+                        )
+                        entry = {"text": str(text_val)}
+                        for k in ("pid", "passage_uid", "passage_id", "id"):
+                            v = row.get(k)
+                            if v:
+                                passages[str(v)] = entry
+                logger.info("Fallback loaded %d passages from corpus", len(passages))
+            except Exception as e:
+                logger.warning("Fallback corpus load failed: %s", e)
 
     queue = build_judge_queue(items, passages)
     if not queue:
