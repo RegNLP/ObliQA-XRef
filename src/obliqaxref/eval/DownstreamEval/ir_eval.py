@@ -11,8 +11,10 @@ Computes (at cutoff k):
 - Recall@k, MAP@k (map_cut_k), nDCG@k (ndcg_cut_k) via pytrec_eval, averaged over ALL test queries
 - Citation-aware diagnostics over ALL test queries:
     Both@k, SRC-only@k, TGT-only@k, Neither@k
+  for k={5,10,20}, plus PairMRR
 
 Also prints a small sample of Neither@k cases for debugging.
+Also writes retrieval_metrics_full.csv and retrieval_diagnostics_per_query.csv.
 
 Expected TREC format per line:
 qid Q0 docid rank score tag
@@ -30,6 +32,7 @@ ObliQA-XRef_Out_Datasets/
 import json
 import logging
 import random
+import csv
 from pathlib import Path
 from typing import Any
 
@@ -164,10 +167,110 @@ def build_qrels(
 # ----------------------------
 
 
+PAIR_DIAGNOSTIC_KS = (5, 10, 20)
+
+
 def _topk_docids(doc_scores: dict[str, float], k: int) -> list[str]:
     if not doc_scores:
         return []
-    return [docid for docid, _ in sorted(doc_scores.items(), key=lambda x: -x[1])[:k]]
+    return [docid for docid, _ in sorted(doc_scores.items(), key=lambda x: (-x[1], x[0]))[:k]]
+
+
+def _ranked_docids(doc_scores: dict[str, float]) -> list[str]:
+    if not doc_scores:
+        return []
+    return [docid for docid, _ in sorted(doc_scores.items(), key=lambda x: (-x[1], x[0]))]
+
+
+def _retrieval_outcome(found_src: bool, found_tgt: bool) -> str:
+    if found_src and found_tgt:
+        return "both"
+    if found_src:
+        return "src_only"
+    if found_tgt:
+        return "tgt_only"
+    return "neither"
+
+
+def compute_pair_diagnostics(
+    run: dict[str, dict[str, float]],
+    src_map: dict[str, str],
+    tgt_map: dict[str, str],
+    *,
+    qids: set[str] | None = None,
+    ks: tuple[int, ...] = PAIR_DIAGNOSTIC_KS,
+    retriever: str = "",
+    corpus: str = "",
+    method: str = "",
+    split: str = "",
+) -> list[dict[str, Any]]:
+    """Compute per-query citation-pair diagnostics for a retrieval run."""
+    eval_qids = sorted(qids if qids is not None else set(src_map) | set(tgt_map))
+    diagnostics: list[dict[str, Any]] = []
+
+    for qid in eval_qids:
+        source_id = src_map.get(qid)
+        target_id = tgt_map.get(qid)
+        ranked = _ranked_docids(run.get(qid, {}))
+        rank_by_docid = {docid: idx for idx, docid in enumerate(ranked, start=1)}
+
+        source_rank = rank_by_docid.get(source_id) if source_id else None
+        target_rank = rank_by_docid.get(target_id) if target_id else None
+        if source_rank is not None and target_rank is not None:
+            pair_rank = max(source_rank, target_rank)
+            pair_rr = 1.0 / pair_rank
+        else:
+            pair_rank = None
+            pair_rr = 0.0
+
+        row: dict[str, Any] = {
+            "corpus": corpus,
+            "dataset": corpus,
+            "method": method,
+            "retriever": retriever,
+            "split": split,
+            "query_id": qid,
+            "item_id": qid,
+            "source_id": source_id,
+            "target_id": target_id,
+            "source_rank": source_rank,
+            "target_rank": target_rank,
+            "pair_rank": pair_rank,
+            "pair_rr": pair_rr,
+        }
+
+        for k in ks:
+            topk_ids = set(ranked[:k])
+            found_src = bool(source_id) and source_id in topk_ids
+            found_tgt = bool(target_id) and target_id in topk_ids
+            row[f"retrieval_outcome_at_{k}"] = _retrieval_outcome(found_src, found_tgt)
+
+        diagnostics.append(row)
+
+    return diagnostics
+
+
+def aggregate_pair_metrics(
+    diagnostics: list[dict[str, Any]],
+    *,
+    ks: tuple[int, ...] = PAIR_DIAGNOSTIC_KS,
+) -> dict[str, float]:
+    """Aggregate mutually exclusive pair retrieval outcomes and PairMRR."""
+    denom = max(1, len(diagnostics))
+    metrics: dict[str, float] = {}
+
+    for k in ks:
+        counts = {"both": 0, "src_only": 0, "tgt_only": 0, "neither": 0}
+        for row in diagnostics:
+            outcome = row.get(f"retrieval_outcome_at_{k}", "neither")
+            counts[outcome] = counts.get(outcome, 0) + 1
+        metrics[f"Both@{k}"] = counts["both"] / denom
+        metrics[f"SRC-only@{k}"] = counts["src_only"] / denom
+        metrics[f"TGT-only@{k}"] = counts["tgt_only"] / denom
+        metrics[f"Neither@{k}"] = counts["neither"] / denom
+
+    metrics["PairMRR"] = sum(float(row.get("pair_rr") or 0.0) for row in diagnostics) / denom
+    return metrics
 
 
 def compute_metrics(
@@ -176,6 +279,7 @@ def compute_metrics(
     src_map: dict[str, str],
     tgt_map: dict[str, str],
     k: int = 10,
+    ks: tuple[int, ...] = PAIR_DIAGNOSTIC_KS,
     diag_samples: int = 5,
     seed: int = 13,
 ) -> dict[str, float]:
@@ -186,51 +290,48 @@ def compute_metrics(
     Important: if a qid is missing from run, it is treated as an empty ranking (all metrics 0).
     """
     all_qids = set(qrels.keys())
+    all_ks = tuple(sorted(set(ks) | {k}))
 
     # For pytrec_eval: ensure every qid exists in run_eval
     run_eval: dict[str, dict[str, float]] = {qid: run.get(qid, {}) for qid in all_qids}
     qrels_eval: dict[str, dict[str, int]] = {qid: qrels[qid] for qid in all_qids}
 
-    metrics_set = {f"recall_{k}", f"ndcg_cut_{k}", f"map_cut_{k}"}
+    metrics_set = set()
+    for cutoff in all_ks:
+        metrics_set.update({f"recall_{cutoff}", f"ndcg_cut_{cutoff}", f"map_cut_{cutoff}"})
     evaluator = pytrec_eval.RelevanceEvaluator(qrels_eval, metrics_set)
     results = evaluator.evaluate(run_eval)
 
     # Average over ALL test queries
     denom = max(1, len(all_qids))
-    recall_k = sum(results[qid].get(f"recall_{k}", 0.0) for qid in all_qids) / denom
-    ndcg_k = sum(results[qid].get(f"ndcg_cut_{k}", 0.0) for qid in all_qids) / denom
-    map_k = sum(results[qid].get(f"map_cut_{k}", 0.0) for qid in all_qids) / denom
+    metrics_out: dict[str, float] = {}
+    for cutoff in all_ks:
+        metrics_out[f"Recall@{cutoff}"] = (
+            sum(results[qid].get(f"recall_{cutoff}", 0.0) for qid in all_qids) / denom
+        )
+        metrics_out[f"MAP@{cutoff}"] = (
+            sum(results[qid].get(f"map_cut_{cutoff}", 0.0) for qid in all_qids) / denom
+        )
+        metrics_out[f"nDCG@{cutoff}"] = (
+            sum(results[qid].get(f"ndcg_cut_{cutoff}", 0.0) for qid in all_qids) / denom
+        )
 
-    # Citation-aware diagnostics (Both / SRC-only / TGT-only / Neither)
-    both = src_only = tgt_only = neither = 0
+    diagnostics = compute_pair_diagnostics(run, src_map, tgt_map, qids=all_qids, ks=all_ks)
+    metrics_out.update(aggregate_pair_metrics(diagnostics, ks=all_ks))
+
+    # Print a few Neither@k samples (from qrels population, not only run-overlap)
     neither_cases: list[dict[str, Any]] = []
-
-    for qid in all_qids:
-        topk_ids = set(_topk_docids(run.get(qid, {}), k))
-        src_id = src_map.get(qid)
-        tgt_id = tgt_map.get(qid)
-
-        found_src = bool(src_id) and (src_id in topk_ids)
-        found_tgt = bool(tgt_id) and (tgt_id in topk_ids)
-
-        if found_src and found_tgt:
-            both += 1
-        elif found_src:
-            src_only += 1
-        elif found_tgt:
-            tgt_only += 1
-        else:
-            neither += 1
+    for row in diagnostics:
+        if row.get(f"retrieval_outcome_at_{k}") == "neither":
             neither_cases.append(
                 {
-                    "qid": qid,
-                    "src_id": src_id,
-                    "tgt_id": tgt_id,
-                    "topk_ids": list(topk_ids)[:k],
+                    "qid": row["query_id"],
+                    "src_id": row["source_id"],
+                    "tgt_id": row["target_id"],
+                    "topk_ids": _topk_docids(run.get(row["query_id"], {}), k),
                 }
             )
 
-    # Print a few Neither@k samples (from qrels population, not only run-overlap)
     if diag_samples > 0 and neither_cases:
         rng = random.Random(seed)
         sample = rng.sample(neither_cases, min(diag_samples, len(neither_cases)))
@@ -242,18 +343,37 @@ def compute_metrics(
             print(f"Target ID: {q['tgt_id']}")
             print("---")
 
-    return {
-        f"Recall@{k}": recall_k,
-        f"MAP@{k}": map_k,
-        f"nDCG@{k}": ndcg_k,
-        f"Both@{k}": both / denom,
-        f"SRC-only@{k}": src_only / denom,
-        f"TGT-only@{k}": tgt_only / denom,
-        f"Neither@{k}": neither / denom,
+    metrics_out.update({
         "num_qrels": float(len(all_qids)),
         "num_run_qids": float(len(run.keys())),
         "num_overlap_qids": float(len(all_qids & set(run.keys()))),
-    }
+    })
+    return metrics_out
+
+
+def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def _preserve_other_corpora_rows(
+    path: Path,
+    *,
+    current_corpus: str,
+    fieldnames: list[str],
+) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    with path.open(newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return [
+        {field: row.get(field) for field in fieldnames}
+        for row in rows
+        if (row.get("corpus") or "").lower() != current_corpus.lower()
+    ]
 
 
 # ----------------------------
@@ -284,6 +404,8 @@ def main(
     logger.info(f"Loaded combined test items: {len(items_all)} (qrels queries: {len(qrels_all)})")
     # Note: per user request, we save 4 outputs (per corpus × per gen-method),
     # prioritizing per-method test files if present.
+    metrics_rows: list[dict[str, Any]] = []
+    diagnostic_rows: list[dict[str, Any]] = []
 
     for subset in ["DPEL", "SCHEMA"]:
         sub_items = load_test_split_subset(corpus, subset, root)
@@ -301,13 +423,100 @@ def main(
                 src_map=src_sub,
                 tgt_map=tgt_sub,
                 k=k,
+                ks=PAIR_DIAGNOSTIC_KS,
                 diag_samples=diag_samples,
             )
             results_sub[method] = metrics
+            metrics_rows.append(
+                {
+                    "corpus": corpus,
+                    "dataset": corpus,
+                    "method": subset,
+                    "retriever": method,
+                    "split": "test",
+                    **metrics,
+                }
+            )
+            diagnostic_rows.extend(
+                compute_pair_diagnostics(
+                    run,
+                    src_sub,
+                    tgt_sub,
+                    qids=set(qrels_sub.keys()),
+                    ks=PAIR_DIAGNOSTIC_KS,
+                    retriever=method,
+                    corpus=corpus,
+                    method=subset,
+                    split="test",
+                )
+            )
         out_path_sub = root / f"ir_eval_{corpus}_{subset.lower()}_test.json"
         with out_path_sub.open("w", encoding="utf-8") as f:
             json.dump(results_sub, f, indent=2)
         logger.info(f"Saved IR eval results to {out_path_sub}")
+
+    if metrics_rows:
+        metric_fieldnames = [
+            "corpus",
+            "dataset",
+            "method",
+            "retriever",
+            "split",
+            "num_qrels",
+            "num_run_qids",
+            "num_overlap_qids",
+        ]
+        for cutoff in PAIR_DIAGNOSTIC_KS:
+            metric_fieldnames.extend(
+                [
+                    f"Recall@{cutoff}",
+                    f"MAP@{cutoff}",
+                    f"nDCG@{cutoff}",
+                    f"Both@{cutoff}",
+                    f"SRC-only@{cutoff}",
+                    f"TGT-only@{cutoff}",
+                    f"Neither@{cutoff}",
+                ]
+            )
+        if k not in PAIR_DIAGNOSTIC_KS:
+            metric_fieldnames.extend([f"Recall@{k}", f"MAP@{k}", f"nDCG@{k}"])
+        metric_fieldnames.append("PairMRR")
+        metrics_path = root / "retrieval_metrics_full.csv"
+        preserved_rows = _preserve_other_corpora_rows(
+            metrics_path,
+            current_corpus=corpus,
+            fieldnames=metric_fieldnames,
+        )
+        _write_csv(metrics_path, preserved_rows + metrics_rows, metric_fieldnames)
+        logger.info("Saved aggregate retrieval metrics to %s", metrics_path)
+
+    if diagnostic_rows:
+        diagnostic_fieldnames = [
+            "corpus",
+            "dataset",
+            "method",
+            "retriever",
+            "split",
+            "query_id",
+            "item_id",
+            "source_id",
+            "target_id",
+            "source_rank",
+            "target_rank",
+            "pair_rank",
+            "retrieval_outcome_at_5",
+            "retrieval_outcome_at_10",
+            "retrieval_outcome_at_20",
+            "pair_rr",
+        ]
+        diagnostics_path = root / "retrieval_diagnostics_per_query.csv"
+        preserved_rows = _preserve_other_corpora_rows(
+            diagnostics_path,
+            current_corpus=corpus,
+            fieldnames=diagnostic_fieldnames,
+        )
+        _write_csv(diagnostics_path, preserved_rows + diagnostic_rows, diagnostic_fieldnames)
+        logger.info("Saved per-query retrieval diagnostics to %s", diagnostics_path)
 
 
 if __name__ == "__main__":

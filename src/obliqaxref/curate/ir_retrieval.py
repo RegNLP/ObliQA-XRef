@@ -178,12 +178,20 @@ def run_ir_retrieval(cfg: RunConfig) -> dict[str, Any]:
     # Cross-encoder reranking
     logger.info("  Running Cross-Encoder reranking...")
     ce = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
+    gold_pairs = {
+        item["item_id"]: (item.get("source_passage_id"), item.get("target_passage_id"))
+        for item in items
+    }
     ce_run = ce.rerank_union(
         [bm25_run, e5_run],
         passage_index,
+        queries=queries,
         union_k=200,
         final_k=top_k,
         run_name="ce_rerank_union200",
+        gold_pairs=gold_pairs,
+        debug_sample_size=min(10, len(queries)),
+        debug_output_path=out_dir / "ce_rerank_debug.jsonl",
     )
 
     logger.info("  ✓ All retrievers complete")

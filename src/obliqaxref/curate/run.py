@@ -224,32 +224,55 @@ _BENCHMARK_CSV_FIELDS = (
     "source_vote_count",
     "target_vote_count",
     "both_vote_count",
+    "answer_validation_passed",
+    "answer_validation_score",
+    "answer_validation_reasons",
+    "missing_source_tag",
+    "missing_target_tag",
+    "answer_responsive",
+    "answer_supported",
+    "judge_schema_version",
+    "source_alone_sufficient",
+    "target_alone_sufficient",
+    "target_adds_essential_information",
+    "citation_dependent",
+    "answer_supported_by_judge",
 )
 
 
 def assemble_final_benchmark(
     curate_out: Path,
     items_file: Path,
+    *,
+    final_export_basis: str = "answer_valid",
 ) -> dict[str, Any]:
-    """Assemble the final benchmark from citation-dependency + answer PASS items.
+    """Assemble explicit final cohorts under the current curation policy.
 
     Reads:
         ``curate_judge/judge_responses_pass.jsonl`` — citation-dependency PASS ids
-        ``curate_answer/answer_responses_pass.jsonl`` — answer-validation PASS ids
+        ``curate_answer/answer_responses_pass.jsonl`` — answer-validation PASS ids, if present
+        ``curate_answer/answer_responses_drop.jsonl`` — answer-validation DROP ids, if present
         ``curated_items.judge.jsonl`` — all items with IR metadata
         ``items_file`` — generator items (question / gold_answer text)
 
     Writes (inside *curate_out*):
-        ``final_benchmark.jsonl`` — all validated items
-        ``final_benchmark.csv``   — flat CSV of key fields
-        ``final_hard.jsonl``      — items with difficulty_tier == "challenging"
-        ``final_hard.csv``        — flat CSV of challenging items
+        ``final_dependency_valid.jsonl/csv`` — judge PASS items
+        ``final_answer_valid.jsonl/csv`` — judge PASS ∩ answer PASS
+        ``final_answer_failed.jsonl/csv`` — judge PASS ∩ answer DROP
+        ``final_benchmark.jsonl/csv`` — compatibility alias based on final_export_basis
+        ``final_hard.jsonl/csv`` — challenging subset of the compatibility alias
         ``final_benchmark_stats.json`` — counts by difficulty_tier / label
 
     Returns a stats dict.
     """
+    if final_export_basis not in {"dependency_valid", "answer_valid"}:
+        raise ValueError("final_export_basis must be 'dependency_valid' or 'answer_valid'")
+
     judge_pass_file = curate_out / "curate_judge" / "judge_responses_pass.jsonl"
     answer_pass_file = curate_out / "curate_answer" / "answer_responses_pass.jsonl"
+    answer_drop_file = curate_out / "curate_answer" / "answer_responses_drop.jsonl"
+    answer_agg_file = curate_out / "curate_answer" / "answer_responses_aggregated.jsonl"
+    judge_agg_file = curate_out / "curate_judge" / "judge_responses_aggregated.jsonl"
     ir_items_file = curate_out / "curated_items.judge.jsonl"
 
     # ---------------------------------------------------------------- load ids
@@ -261,6 +284,7 @@ def assemble_final_benchmark(
         return {}
 
     judge_pass_ids: set[str] = set()
+    judge_by_id: dict[str, dict[str, Any]] = {}
     with open(judge_pass_file, encoding="utf-8") as f:
         for line in f:
             obj = json.loads(line)
@@ -268,29 +292,57 @@ def assemble_final_benchmark(
                 iid = obj.get("item_id")
                 if iid:
                     judge_pass_ids.add(iid)
+                    judge_by_id[iid] = obj
 
-    if not answer_pass_file.exists():
-        logger.warning(
-            "Answer PASS file not found (%s); skipping final benchmark assembly",
-            answer_pass_file,
-        )
-        return {}
-
-    answer_pass_ids: set[str] = set()
-    with open(answer_pass_file, encoding="utf-8") as f:
-        for line in f:
-            obj = json.loads(line)
-            if obj.get("decision_ans_final") == "PASS_ANS":
+    if judge_agg_file.exists():
+        with open(judge_agg_file, encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
                 iid = obj.get("item_id")
                 if iid:
-                    answer_pass_ids.add(iid)
+                    judge_by_id[iid] = {**judge_by_id.get(iid, {}), **obj}
 
-    final_ids: set[str] = judge_pass_ids & answer_pass_ids
+    answer_pass_ids: set[str] = set()
+    answer_drop_ids: set[str] = set()
+    answer_by_id: dict[str, dict[str, Any]] = {}
+    if answer_pass_file.exists():
+        with open(answer_pass_file, encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                if obj.get("decision_ans_final") == "PASS_ANS":
+                    iid = obj.get("item_id")
+                    if iid:
+                        answer_pass_ids.add(iid)
+                        answer_by_id[iid] = obj
+    else:
+        logger.warning("Answer PASS file not found: %s", answer_pass_file)
+
+    if answer_drop_file.exists():
+        with open(answer_drop_file, encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                if obj.get("decision_ans_final") == "DROP_ANS":
+                    iid = obj.get("item_id")
+                    if iid:
+                        answer_drop_ids.add(iid)
+                        answer_by_id[iid] = obj
+
+    if answer_agg_file.exists():
+        with open(answer_agg_file, encoding="utf-8") as f:
+            for line in f:
+                obj = json.loads(line)
+                iid = obj.get("item_id")
+                if iid:
+                    answer_by_id[iid] = {**answer_by_id.get(iid, {}), **obj}
+
+    dependency_valid_ids: set[str] = set(judge_pass_ids)
+    answer_valid_ids: set[str] = judge_pass_ids & answer_pass_ids
+    answer_failed_ids: set[str] = judge_pass_ids & answer_drop_ids
     logger.info(
-        "  Final benchmark: %d judge-PASS ∩ %d answer-PASS = %d items",
+        "  Final cohorts: dependency_valid=%d, answer_valid=%d, answer_failed=%d",
         len(judge_pass_ids),
-        len(answer_pass_ids),
-        len(final_ids),
+        len(answer_valid_ids),
+        len(answer_failed_ids),
     )
 
     # ---------------------------------------------------------- load metadata
@@ -313,21 +365,47 @@ def assemble_final_benchmark(
                     gen_items_by_id[iid] = obj
 
     # ------------------------------------------ build final benchmark records
-    final_items: list[dict[str, Any]] = []
-    for iid in sorted(final_ids):  # stable order
+    all_candidate_ids = dependency_valid_ids | answer_valid_ids | answer_failed_ids
+
+    def _reason_list(obj: dict[str, Any]) -> list[str]:
+        reasons: list[str] = []
+        reason = obj.get("reason_code_ans_final") or obj.get("reason_code_qp_final")
+        if reason:
+            reasons.append(str(reason))
+        for run in obj.get("runs") or []:
+            run_reason = run.get("reason_code_ans") or run.get("reason_code_qp")
+            if run_reason and str(run_reason) not in reasons:
+                reasons.append(str(run_reason))
+            notes = run.get("notes")
+            if notes and str(notes) not in reasons:
+                reasons.append(str(notes))
+        return reasons
+
+    def _has_tag(answer: str, tag_prefix: str, pid: str) -> bool:
+        return f"[#{tag_prefix}:{pid}]" in (answer or "")
+
+    records_by_id: dict[str, dict[str, Any]] = {}
+    for iid in sorted(all_candidate_ids):  # stable order
         gen = gen_items_by_id.get(iid, {})
         ir = ir_items_by_id.get(iid, {})
+        judge = judge_by_id.get(iid, {})
+        answer = answer_by_id.get(iid, {})
 
         ir_label = ir.get("ir_difficulty_label", "unknown")
+        source_pid = gen.get("source_passage_id", ir.get("source_passage_id", ""))
+        target_pid = gen.get("target_passage_id", ir.get("target_passage_id", ""))
+        gold_answer = gen.get("gold_answer", ir.get("gold_answer", ""))
+        answer_passed = iid in answer_valid_ids
+        answer_failed = iid in answer_failed_ids
         record: dict[str, Any] = {
             "item_id": iid,
-            "question": gen.get("question", ""),
-            "gold_answer": gen.get("gold_answer", ""),
-            "source_passage_id": gen.get("source_passage_id", ir.get("source_passage_id", "")),
-            "target_passage_id": gen.get("target_passage_id", ir.get("target_passage_id", "")),
-            "method": gen.get("method", ""),
-            "pair_uid": gen.get("pair_uid", ""),
-            "persona": gen.get("persona", ""),
+            "question": gen.get("question", ir.get("question", "")),
+            "gold_answer": gold_answer,
+            "source_passage_id": source_pid,
+            "target_passage_id": target_pid,
+            "method": gen.get("method", ir.get("method", "")),
+            "pair_uid": gen.get("pair_uid", ir.get("pair_uid", "")),
+            "persona": gen.get("persona", ir.get("persona", "")),
             "ir_difficulty_label": ir_label,
             "difficulty_tier": assign_difficulty_tier(ir_label),
             "source_vote_count": ir.get("source_vote_count", 0),
@@ -336,12 +414,45 @@ def assemble_final_benchmark(
             "retrievers_recovering_source": ir.get("retrievers_recovering_source", []),
             "retrievers_recovering_target": ir.get("retrievers_recovering_target", []),
             "retrievers_recovering_both": ir.get("retrievers_recovering_both", []),
+            "answer_validation_passed": answer_passed,
+            "answer_validation_score": answer.get("confidence_mean"),
+            "answer_validation_reasons": _reason_list(answer),
+            "unsupported_claims": answer.get("unsupported_claims"),
+            "missing_source_tag": not _has_tag(gold_answer, "SRC", source_pid),
+            "missing_target_tag": not _has_tag(gold_answer, "TGT", target_pid),
+            "answer_responsive": answer.get(
+                "answer_responsive", answer.get("answer_addresses_question")
+            ),
+            "answer_supported": answer.get(
+                "answer_supported", answer.get("answer_grounded_in_passages")
+            ),
+            "answer_validation_failed": answer_failed,
+            "judge_schema_version": judge.get("judge_schema_version") or ir.get("judge_schema_version"),
+            "source_alone_sufficient": judge.get(
+                "source_alone_sufficient", ir.get("source_alone_sufficient")
+            ),
+            "target_alone_sufficient": judge.get(
+                "target_alone_sufficient", ir.get("target_alone_sufficient")
+            ),
+            "target_adds_essential_information": judge.get(
+                "target_adds_essential_information",
+                ir.get("target_adds_essential_information"),
+            ),
+            "citation_dependent": judge.get("citation_dependent", ir.get("citation_dependent")),
+            "answer_supported_by_judge": judge.get(
+                "answer_supported_by_judge", ir.get("answer_supported_by_judge")
+            ),
         }
-        final_items.append(record)
+        records_by_id[iid] = record
 
-    hard_items = [
-        item for item in final_items if item["difficulty_tier"] == "challenging"
-    ]
+    dependency_valid_items = [records_by_id[iid] for iid in sorted(dependency_valid_ids)]
+    answer_valid_items = [records_by_id[iid] for iid in sorted(answer_valid_ids)]
+    answer_failed_items = [records_by_id[iid] for iid in sorted(answer_failed_ids)]
+
+    compatibility_items = (
+        dependency_valid_items if final_export_basis == "dependency_valid" else answer_valid_items
+    )
+    hard_items = [item for item in compatibility_items if item["difficulty_tier"] == "challenging"]
 
     # ------------------------------------------------------------- write JSONL
     def _write_jsonl(path: Path, items: list[dict[str, Any]]) -> None:
@@ -359,13 +470,31 @@ def assemble_final_benchmark(
             writer.writeheader()
             writer.writerows(items)
 
-    _write_jsonl(curate_out / "final_benchmark.jsonl", final_items)
-    _write_csv(curate_out / "final_benchmark.csv", final_items)
+    _write_jsonl(curate_out / "final_dependency_valid.jsonl", dependency_valid_items)
+    _write_csv(curate_out / "final_dependency_valid.csv", dependency_valid_items)
+    _write_jsonl(curate_out / "final_answer_valid.jsonl", answer_valid_items)
+    _write_csv(curate_out / "final_answer_valid.csv", answer_valid_items)
+    _write_jsonl(curate_out / "final_answer_failed.jsonl", answer_failed_items)
+    _write_csv(curate_out / "final_answer_failed.csv", answer_failed_items)
+
+    _write_jsonl(curate_out / "final_benchmark.jsonl", compatibility_items)
+    _write_csv(curate_out / "final_benchmark.csv", compatibility_items)
     _write_jsonl(curate_out / "final_hard.jsonl", hard_items)
     _write_csv(curate_out / "final_hard.csv", hard_items)
 
     logger.info(
-        "  ✓ final_benchmark.jsonl / .csv  (%d items)", len(final_items)
+        "  ✓ final_dependency_valid.jsonl / .csv  (%d items)", len(dependency_valid_items)
+    )
+    logger.info(
+        "  ✓ final_answer_valid.jsonl / .csv      (%d items)", len(answer_valid_items)
+    )
+    logger.info(
+        "  ✓ final_answer_failed.jsonl / .csv     (%d items)", len(answer_failed_items)
+    )
+    logger.info(
+        "  ✓ final_benchmark.jsonl / .csv         (%d items; basis=%s)",
+        len(compatibility_items),
+        final_export_basis,
     )
     logger.info(
         "  ✓ final_hard.jsonl / .csv       (%d challenging items)", len(hard_items)
@@ -374,7 +503,7 @@ def assemble_final_benchmark(
     # ------------------------------------------------------------------ stats
     label_counts: dict[str, int] = {}
     tier_counts: dict[str, int] = {"retrievable": 0, "challenging": 0}
-    for item in final_items:
+    for item in compatibility_items:
         lbl = item["ir_difficulty_label"]
         label_counts[lbl] = label_counts.get(lbl, 0) + 1
         tier_counts[item["difficulty_tier"]] = (
@@ -382,7 +511,14 @@ def assemble_final_benchmark(
         )
 
     stats: dict[str, Any] = {
-        "total_final": len(final_items),
+        "generated_count": len(gen_items_by_id),
+        "citation_dependency_passed_count": len(dependency_valid_items),
+        "answer_validation_passed_count": len(answer_valid_items),
+        "answer_validation_failed_count": len(answer_failed_items),
+        "final_dependency_valid_count": len(dependency_valid_items),
+        "final_answer_valid_count": len(answer_valid_items),
+        "final_export_basis": final_export_basis,
+        "total_final": len(compatibility_items),
         "total_hard": len(hard_items),
         "difficulty_tier_counts": tier_counts,
         "ir_difficulty_label_counts": label_counts,
@@ -412,6 +548,31 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
     """
 
     start_time = time.time()
+
+    # -------------------------------------------------------------------------
+    # PILOT MODE: redirect I/O directories to pilot-specific paths
+    # -------------------------------------------------------------------------
+    pilot_cfg = cfg.pilot
+    pilot_active = pilot_cfg.pilot_mode
+    if pilot_active:
+        suffix = pilot_cfg.pilot_output_suffix
+        base_out = Path(cfg.paths.output_dir)
+        pilot_out = base_out.parent / f"{base_out.name}_{suffix}"
+        base_curate_out = Path(cfg.paths.curate_output_dir or cfg.paths.output_dir)
+        pilot_curate_out = base_curate_out.parent / f"{base_curate_out.name}_{suffix}"
+        patched_paths = cfg.paths.model_copy(
+            update={
+                "output_dir": str(pilot_out),
+                "curate_output_dir": str(pilot_curate_out),
+            }
+        )
+        cfg = cfg.model_copy(update={"paths": patched_paths})
+        logger.warning(
+            "*** PILOT MODE ACTIVE: curation reading from %s, writing to %s ***",
+            pilot_out,
+            pilot_curate_out,
+        )
+
     output_path = cfg.paths.curate_output_dir or cfg.paths.output_dir
     out_dir = ensure_dir(output_path)
 
@@ -639,7 +800,11 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
     logger.info("\n[Phase 5] Assembling final benchmark...")
     _items_file = Path(cfg.paths.output_dir) / "generator" / "items.jsonl"
     try:
-        bench_stats = assemble_final_benchmark(out_dir, _items_file)
+        bench_stats = assemble_final_benchmark(
+            out_dir,
+            _items_file,
+            final_export_basis=cfg.curation.final_export_basis,
+        )
         if bench_stats:
             stats["final_benchmark"] = bench_stats
             logger.info(
@@ -658,5 +823,15 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
     logger.info(f"Outputs written to: {out_dir}")
     logger.info(f"Total time: {elapsed:.1f}s")
     logger.info("=" * 70)
+
+    # Emit pilot report when pilot mode is active
+    if pilot_active and not (overrides and overrides.dry_run):
+        try:
+            from obliqaxref.pilot.report import generate_pilot_report
+
+            generate_pilot_report(out_dir=out_dir, curate_stats=stats)
+            logger.info("Pilot report written to: %s", out_dir)
+        except Exception as e:
+            logger.warning("Pilot report generation failed: %s", e)
 
     return stats

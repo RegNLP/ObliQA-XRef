@@ -53,14 +53,44 @@ def generate(
     dedup: bool = typer.Option(True, "--dedup/--no-dedup"),
     drop_title_targets: bool = typer.Option(True, "--drop-title-targets/--keep-title-targets"),
     dual_anchors_mode: str = typer.Option(
-        "freeform_only", "--dual-anchors-mode", help="off | freeform_only | always"
+        "always", "--dual-anchors-mode", help="off | freeform_only | always"
     ),
-    no_citations: bool = typer.Option(False, "--no-citations"),
+    no_citations: bool = typer.Option(True, "--no-citations/--allow-citations"),
+    pilot: bool = typer.Option(False, "--pilot/--no-pilot", help="Enable pilot mode."),
+    pilot_n: int | None = typer.Option(
+        None, "--pilot-n", help="Number of xrefs to sample in pilot mode (overrides config)."
+    ),
+    pilot_seed: int | None = typer.Option(
+        None, "--pilot-seed", help="Random seed for pilot sampling (overrides config)."
+    ),
+    pilot_suffix: str | None = typer.Option(
+        None, "--pilot-suffix", help="Output directory suffix in pilot mode (overrides config)."
+    ),
+    sampling_mode: str | None = typer.Option(
+        None,
+        "--sampling-mode",
+        help=(
+            "Cross-reference row sampling strategy: "
+            "random | low_overlap | multi_ref_source | "
+            "target_definition_or_condition | mixed_difficulty"
+        ),
+    ),
 ) -> None:
     """Stage 1: Generate citation-dependent QA items (DPEL + SCHEMA)."""
     setup_logging(log_level)
     cfg = load_config(config)
     logger.info("Loaded config: %s", config)
+
+    # Apply CLI pilot overrides to the pilot config
+    if pilot or pilot_n is not None or pilot_seed is not None or pilot_suffix is not None:
+        pilot_updates: dict = {"pilot_mode": pilot}
+        if pilot_n is not None:
+            pilot_updates["pilot_n_xrefs_per_corpus"] = pilot_n
+        if pilot_seed is not None:
+            pilot_updates["pilot_random_seed"] = pilot_seed
+        if pilot_suffix is not None:
+            pilot_updates["pilot_output_suffix"] = pilot_suffix
+        cfg = cfg.model_copy(update={"pilot": cfg.pilot.model_copy(update=pilot_updates)})
 
     from obliqaxref.generate.run import GenerateOverrides, run
 
@@ -79,6 +109,7 @@ def generate(
         drop_title_targets=drop_title_targets,
         dual_anchors_mode=dual_anchors_mode,
         no_citations=no_citations,
+        sampling_mode=sampling_mode,
     )
     run(cfg, o)
     logger.info("Generation complete. Outputs under: %s", cfg.paths.output_dir)
@@ -116,11 +147,32 @@ def curate(
         help="Judge LLM deployment (default: AZURE_OPENAI_DEPLOYMENT_GPT52).",
     ),
     judge_temperature: float = typer.Option(0.3, "--judge-temperature"),
+    pilot: bool = typer.Option(False, "--pilot/--no-pilot", help="Enable pilot mode."),
+    pilot_n: int | None = typer.Option(
+        None, "--pilot-n", help="Number of xrefs to sample in pilot mode (overrides config)."
+    ),
+    pilot_seed: int | None = typer.Option(
+        None, "--pilot-seed", help="Random seed for pilot sampling (overrides config)."
+    ),
+    pilot_suffix: str | None = typer.Option(
+        None, "--pilot-suffix", help="Output directory suffix in pilot mode (overrides config)."
+    ),
 ) -> None:
     """Stage 2: Curation (IR retrieval → voting → judge validation)."""
     setup_logging(log_level)
     cfg = load_config(config)
     logger.info("Loaded config: %s", config)
+
+    # Apply CLI pilot overrides to the pilot config
+    if pilot or pilot_n is not None or pilot_seed is not None or pilot_suffix is not None:
+        pilot_updates: dict = {"pilot_mode": pilot}
+        if pilot_n is not None:
+            pilot_updates["pilot_n_xrefs_per_corpus"] = pilot_n
+        if pilot_seed is not None:
+            pilot_updates["pilot_random_seed"] = pilot_seed
+        if pilot_suffix is not None:
+            pilot_updates["pilot_output_suffix"] = pilot_suffix
+        cfg = cfg.model_copy(update={"pilot": cfg.pilot.model_copy(update=pilot_updates)})
 
     from obliqaxref.curate.run import CurateOverrides, run
 

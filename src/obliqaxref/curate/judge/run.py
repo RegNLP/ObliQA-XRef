@@ -1,8 +1,8 @@
 """
-Judge orchestration (Azure-only): Select JUDGE_IR items → build QP queue → multi-pass LLM → aggregate → write outputs.
+Judge orchestration (Azure-only): Select JUDGE_IR items → build queue → multi-pass LLM → aggregate → write outputs.
 
 Design:
-- Answer-agnostic: does NOT validate gold_answer (separate step)
+- Strict citation-dependency rubric with answer-support auditing
 - Azure-only: uses Azure OpenAI deployments via AzureOpenAI client
 - Conservative: prefer DROP_QP on errors/uncertainty
 """
@@ -36,6 +36,7 @@ from obliqaxref.utils.io import ensure_dir, write_json
 from .prompt import QP_JUDGE_SYSTEM_PROMPT, build_qp_judge_prompt
 from .schema import (
     AggregatedJudgeResponse,
+    JUDGE_SCHEMA_VERSION,
     JudgeQueueItem,
     JudgeResponse,
     QPDecision,
@@ -160,6 +161,7 @@ def build_judge_queue(
                 source_text=source_text,
                 target_passage_id=target_pid,
                 target_text=target_text,
+                gold_answer=item.get("gold_answer") or item.get("expected_answer"),
                 ir_votes=item.get("ir_votes"),
                 metadata=item.get("metadata"),
             )
@@ -197,6 +199,7 @@ def call_judge_llm_once(
     queue_item: JudgeQueueItem,
     temperature: float,
     max_completion_tokens: int,
+    pass_threshold: int = 7,
 ) -> JudgeResponse:
     """
     Single-pass QP-only judgement call (answer-agnostic).
@@ -206,6 +209,9 @@ def call_judge_llm_once(
         question=queue_item.question,
         source_text=queue_item.source_text,
         target_text=queue_item.target_text,
+        gold_answer=queue_item.gold_answer,
+        source_passage_id=queue_item.source_passage_id,
+        target_passage_id=queue_item.target_passage_id,
     )
 
     resp = client.chat.completions.create(
@@ -221,19 +227,153 @@ def call_judge_llm_once(
     text = (resp.choices[0].message.content or "").strip()
     obj = parse_json_lenient(text)
 
-    if not isinstance(obj, dict) or "decision_qp" not in obj or "confidence" not in obj:
+    if not isinstance(obj, dict):
         raise ValueError(f"Judge response not valid JSON schema. Raw text: {text[:200]}")
 
-    # Parse source_alone_insufficient (should be True for all PASS_QP items in strict mode)
-    source_alone_insufficient = obj.get("source_alone_insufficient")
+    return judge_response_from_json(queue_item.item_id, obj, pass_threshold=pass_threshold)
+
+
+def _as_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"true", "yes", "1"}:
+            return True
+        if v in {"false", "no", "0"}:
+            return False
+    return None
+
+
+def _as_score(value: Any, default: int = 0) -> int:
+    try:
+        return max(0, min(10, int(round(float(value)))))
+    except Exception:
+        return default
+
+
+def _infer_reason_code(binary_checks: dict[str, bool], explicit: Any = None) -> QPReasonCode:
+    if explicit:
+        try:
+            return QPReasonCode(explicit)
+        except Exception:
+            pass
+    if binary_checks.get("source_alone_sufficient") is True:
+        return QPReasonCode.QP_NOT_CIT_DEP
+    if (
+        binary_checks.get("target_relevant") is False
+        or binary_checks.get("target_adds_essential_information") is False
+    ):
+        return QPReasonCode.QP_WRONG_TARGET
+    if binary_checks.get("source_relevant") is False:
+        return QPReasonCode.QP_SCOPE_MISMATCH
+    if binary_checks.get("answer_supported") is False:
+        return QPReasonCode.QP_ILL_FORMED
+    if binary_checks.get("citation_dependent") is False:
+        return QPReasonCode.QP_NOT_CIT_DEP
+    return QPReasonCode.QP_ILL_FORMED
+
+
+def judge_response_from_json(
+    item_id: str,
+    obj: dict[str, Any],
+    *,
+    pass_threshold: int = 7,
+) -> JudgeResponse:
+    """Parse v2 judge JSON while accepting legacy judge outputs."""
+    binary_raw = obj.get("binary_checks") if isinstance(obj.get("binary_checks"), dict) else {}
+    binary_checks = {
+        "source_relevant": _as_bool(binary_raw.get("source_relevant")),
+        "target_relevant": _as_bool(binary_raw.get("target_relevant")),
+        "source_alone_sufficient": _as_bool(binary_raw.get("source_alone_sufficient")),
+        "target_alone_sufficient": _as_bool(binary_raw.get("target_alone_sufficient")),
+        "target_adds_essential_information": _as_bool(
+            binary_raw.get("target_adds_essential_information")
+        ),
+        "answer_supported": _as_bool(binary_raw.get("answer_supported")),
+        "citation_dependent": _as_bool(binary_raw.get("citation_dependent")),
+    }
+    binary_checks = {k: v for k, v in binary_checks.items() if v is not None}
+
+    subscores_raw = obj.get("subscores") if isinstance(obj.get("subscores"), dict) else {}
+    subscores = {
+        key: _as_score(subscores_raw.get(key), default=0)
+        for key in (
+            "realism",
+            "source_relevance",
+            "target_relevance",
+            "source_insufficiency",
+            "target_necessity",
+            "answer_support",
+        )
+        if key in subscores_raw
+    }
+
+    final_score = (
+        _as_score(obj.get("final_score"), default=0)
+        if obj.get("final_score") is not None
+        else None
+    )
+
+    is_v2 = bool(obj.get("passed") is not None or binary_checks or final_score is not None)
+
+    if is_v2:
+        source_relevant = binary_checks.get("source_relevant") is True
+        target_relevant = binary_checks.get("target_relevant") is True
+        source_alone_sufficient = binary_checks.get("source_alone_sufficient") is True
+        target_adds = binary_checks.get("target_adds_essential_information") is True
+        answer_supported = binary_checks.get("answer_supported") is True
+        citation_dependent = binary_checks.get("citation_dependent") is True
+        score_ok = (final_score or 0) >= pass_threshold
+
+        passed = bool(
+            source_relevant
+            and target_relevant
+            and not source_alone_sufficient
+            and target_adds
+            and answer_supported
+            and citation_dependent
+            and score_ok
+        )
+        decision = QPDecision.PASS_QP if passed else QPDecision.DROP_QP
+        reason = None if passed else _infer_reason_code(binary_checks, obj.get("reason_code_qp"))
+        confidence = float(obj.get("confidence", (final_score or 0) / 10.0))
+        source_alone_insufficient = not source_alone_sufficient
+    else:
+        if "decision_qp" not in obj or "confidence" not in obj:
+            raise ValueError("Judge response missing both v2 fields and legacy decision_qp/confidence")
+        decision = QPDecision(obj["decision_qp"])
+        reason = QPReasonCode(obj["reason_code_qp"]) if obj.get("reason_code_qp") else None
+        confidence = float(obj["confidence"])
+        source_alone_insufficient = obj.get("source_alone_insufficient")
+        source_alone_sufficient = (
+            not source_alone_insufficient if isinstance(source_alone_insufficient, bool) else None
+        )
+        passed = decision == QPDecision.PASS_QP
+
+    reasons = obj.get("reasons")
+    if reasons is not None and not isinstance(reasons, list):
+        reasons = [str(reasons)]
 
     return JudgeResponse(
-        item_id=queue_item.item_id,
-        decision_qp=obj["decision_qp"],
-        reason_code_qp=obj.get("reason_code_qp"),
-        confidence=obj["confidence"],
+        item_id=item_id,
+        decision_qp=decision,
+        reason_code_qp=reason,
+        confidence=confidence,
+        judge_schema_version=str(obj.get("judge_schema_version") or (JUDGE_SCHEMA_VERSION if is_v2 else "v1")),
+        passed=passed,
+        final_score=final_score,
+        subscores=subscores or None,
+        binary_checks=binary_checks or None,
         source_alone_insufficient=source_alone_insufficient,
+        source_alone_sufficient=source_alone_sufficient,
+        target_alone_sufficient=binary_checks.get("target_alone_sufficient"),
+        target_adds_essential_information=binary_checks.get("target_adds_essential_information"),
+        citation_dependent=binary_checks.get("citation_dependent"),
+        answer_supported_by_judge=binary_checks.get("answer_supported"),
+        target_contains_missing_detail=binary_checks.get("target_adds_essential_information"),
         key_missing_detail=obj.get("key_missing_detail"),
+        reasons=reasons,
         support_snippets=obj.get("support_snippets"),
         notes=obj.get("notes"),
     )
@@ -283,11 +423,65 @@ def aggregate_judge_passes(item_id: str, passes: list[JudgeResponse]) -> Aggrega
         or confidence_mean < 0.75  # Stricter: require higher confidence
     )
 
+    def majority_bool(attr: str) -> bool | None:
+        vals = [getattr(p, attr) for p in passes if getattr(p, attr) is not None]
+        if not vals:
+            return None
+        return sum(1 for v in vals if v) > (len(vals) / 2)
+
+    final_score_vals = [p.final_score for p in passes if p.final_score is not None]
+    final_score = (
+        int(round(sum(final_score_vals) / len(final_score_vals))) if final_score_vals else None
+    )
+    source_alone_sufficient = majority_bool("source_alone_sufficient")
+    target_alone_sufficient = majority_bool("target_alone_sufficient")
+    target_adds = majority_bool("target_adds_essential_information")
+    citation_dependent = majority_bool("citation_dependent")
+    answer_supported = majority_bool("answer_supported_by_judge")
+
+    failure_flags = {
+        "source_alone_sufficient": source_alone_sufficient is True,
+        "target_not_necessary": target_adds is False,
+        "unsupported_answer": answer_supported is False,
+    }
+
+    # V2 guardrail: even if legacy confidence voting would pass, explicit failed
+    # binary checks force a conservative DROP.
+    if (
+        final_decision == QPDecision.PASS_QP
+        and (
+            source_alone_sufficient is True
+            or target_adds is False
+            or citation_dependent is False
+            or answer_supported is False
+        )
+    ):
+        final_decision = QPDecision.DROP_QP
+        if source_alone_sufficient is True:
+            final_reason = QPReasonCode.QP_NOT_CIT_DEP
+        elif target_adds is False:
+            final_reason = QPReasonCode.QP_WRONG_TARGET
+        elif answer_supported is False:
+            final_reason = QPReasonCode.QP_ILL_FORMED
+        else:
+            final_reason = QPReasonCode.QP_NOT_CIT_DEP
+
     runs = [
         {
+            "judge_schema_version": p.judge_schema_version,
             "decision_qp": p.decision_qp.value,
             "reason_code_qp": p.reason_code_qp.value if p.reason_code_qp else None,
             "confidence": p.confidence,
+            "passed": p.passed,
+            "final_score": p.final_score,
+            "subscores": p.subscores,
+            "binary_checks": p.binary_checks,
+            "reasons": p.reasons,
+            "source_alone_sufficient": p.source_alone_sufficient,
+            "target_alone_sufficient": p.target_alone_sufficient,
+            "target_adds_essential_information": p.target_adds_essential_information,
+            "citation_dependent": p.citation_dependent,
+            "answer_supported_by_judge": p.answer_supported_by_judge,
         }
         for p in passes
     ]
@@ -302,6 +496,15 @@ def aggregate_judge_passes(item_id: str, passes: list[JudgeResponse]) -> Aggrega
         confidence_mean=round(confidence_mean, 3),
         weighted_fraction=round(weighted_fraction, 3),
         flag_low_consensus=flag_low_consensus,
+        judge_schema_version=JUDGE_SCHEMA_VERSION,
+        passed=final_decision == QPDecision.PASS_QP,
+        final_score=final_score,
+        source_alone_sufficient=source_alone_sufficient,
+        target_alone_sufficient=target_alone_sufficient,
+        target_adds_essential_information=target_adds,
+        citation_dependent=citation_dependent,
+        answer_supported_by_judge=answer_supported,
+        failure_flags=failure_flags,
         runs=runs,
     )
 
@@ -316,6 +519,7 @@ def process_judge_queue(
     rate_limit_delay_s: float = 0.15,
     outer_retries: int = 2,
     max_completion_tokens: int = 700,
+    pass_threshold: int = 7,
 ) -> list[AggregatedJudgeResponse]:
     """
     Multi-pass per item, then aggregate.
@@ -345,6 +549,7 @@ def process_judge_queue(
                         queue_item=item,
                         temperature=temperature,
                         max_completion_tokens=max_completion_tokens,
+                        pass_threshold=pass_threshold,
                     )
                     passes.append(r)
                     last_err = None
@@ -366,6 +571,24 @@ def process_judge_queue(
                         decision_qp=QPDecision.DROP_QP,
                         reason_code_qp=QPReasonCode.QP_ILL_FORMED,
                         confidence=0.0,
+                        judge_schema_version=JUDGE_SCHEMA_VERSION,
+                        passed=False,
+                        final_score=0,
+                        binary_checks={
+                            "source_relevant": False,
+                            "target_relevant": False,
+                            "source_alone_sufficient": False,
+                            "target_alone_sufficient": False,
+                            "target_adds_essential_information": False,
+                            "answer_supported": False,
+                            "citation_dependent": False,
+                        },
+                        source_alone_sufficient=False,
+                        target_alone_sufficient=False,
+                        target_adds_essential_information=False,
+                        citation_dependent=False,
+                        answer_supported_by_judge=False,
+                        reasons=["Judge execution error"],
                         notes=f"Judge error: {type(last_err).__name__}: {last_err}",
                     )
                 )
@@ -398,6 +621,7 @@ def write_judge_output(
     temperature: float,
     input_file: Path,
     num_passes: int,
+    pass_threshold: int,
 ) -> None:
     ensure_dir(output_dir)
 
@@ -417,6 +641,33 @@ def write_judge_output(
             )
             f.write(json.dumps(d, ensure_ascii=False) + "\n")
     logger.info("Wrote aggregated responses: %s (n=%d)", out_file, len(aggregated_responses))
+
+    response_by_id = {r.item_id: r for r in aggregated_responses}
+    annotated_items_file = output_dir.parent / "curated_items.judge.with_judge_metadata.jsonl"
+    if input_file.exists():
+        with open(input_file, encoding="utf-8") as in_f, open(
+            annotated_items_file, "w", encoding="utf-8"
+        ) as out_f:
+            for line in in_f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                resp = response_by_id.get(item.get("item_id"))
+                if resp is not None:
+                    item.update(
+                        {
+                            "judge_schema_version": resp.judge_schema_version,
+                            "source_alone_sufficient": resp.source_alone_sufficient,
+                            "target_alone_sufficient": resp.target_alone_sufficient,
+                            "target_adds_essential_information": (
+                                resp.target_adds_essential_information
+                            ),
+                            "citation_dependent": resp.citation_dependent,
+                            "answer_supported_by_judge": resp.answer_supported_by_judge,
+                        }
+                    )
+                out_f.write(json.dumps(item, ensure_ascii=False) + "\n")
+        logger.info("Wrote judge-annotated curated items: %s", annotated_items_file)
 
     # Write separate files for PASS and DROP (strictly citation-dependent benchmark)
     pass_file = output_dir / "judge_responses_pass.jsonl"
@@ -444,6 +695,15 @@ def write_judge_output(
     pass_qp = sum(1 for r in aggregated_responses if r.decision_qp_final == QPDecision.PASS_QP)
     drop_qp = sum(1 for r in aggregated_responses if r.decision_qp_final == QPDecision.DROP_QP)
     low_consensus = sum(1 for r in aggregated_responses if r.flag_low_consensus)
+    failed_source_alone = sum(
+        1 for r in aggregated_responses if (r.failure_flags or {}).get("source_alone_sufficient")
+    )
+    failed_target_not_necessary = sum(
+        1 for r in aggregated_responses if (r.failure_flags or {}).get("target_not_necessary")
+    )
+    failed_unsupported_answer = sum(
+        1 for r in aggregated_responses if (r.failure_flags or {}).get("unsupported_answer")
+    )
 
     avg_conf = (
         (sum(r.confidence_mean for r in aggregated_responses) / len(aggregated_responses))
@@ -462,9 +722,15 @@ def write_judge_output(
     reason_breakdown = dict(Counter(reason_codes))
 
     stats = {
+        "judge_schema_version": JUDGE_SCHEMA_VERSION,
         "total_items": len(aggregated_responses),
+        "number_judged": len(aggregated_responses),
+        "number_passed": pass_qp,
         "pass_qp_count": pass_qp,
         "drop_qp_count": drop_qp,
+        "failed_source_alone_sufficiency_count": failed_source_alone,
+        "failed_target_not_necessary_count": failed_target_not_necessary,
+        "failed_unsupported_answer_count": failed_unsupported_answer,
         "low_consensus_count": low_consensus,
         "avg_confidence_mean": round(avg_conf, 3),
         "avg_weighted_fraction": round(avg_weighted, 3),
@@ -472,6 +738,7 @@ def write_judge_output(
         "judge_model": model,
         "judge_temperature": temperature,
         "num_judge_passes": num_passes,
+        "judge_pass_threshold": pass_threshold,
         "input_file": str(input_file),
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
@@ -537,6 +804,7 @@ def run_judge(cfg: RunConfig) -> None:
     rate_delay = float(judge_cfg.get("rate_limit_delay", 0.15))
     outer_retries = int(judge_cfg.get("outer_retries", 2))
     max_completion_tokens = int(judge_cfg.get("max_completion_tokens", 700))
+    pass_threshold = int(judge_cfg.get("score_threshold", 7))
 
     # Diagnostic: log what Azure credentials were resolved
     logger.info(
@@ -565,6 +833,7 @@ def run_judge(cfg: RunConfig) -> None:
         rate_limit_delay_s=rate_delay,
         outer_retries=outer_retries,
         max_completion_tokens=max_completion_tokens,
+        pass_threshold=pass_threshold,
     )
 
     write_judge_output(
@@ -575,6 +844,7 @@ def run_judge(cfg: RunConfig) -> None:
         temperature=temperature,
         input_file=items_file,
         num_passes=num_passes,
+        pass_threshold=pass_threshold,
     )
 
     logger.info("QP judge evaluation complete in %.2fs", time.time() - t0)

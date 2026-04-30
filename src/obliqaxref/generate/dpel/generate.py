@@ -55,6 +55,7 @@ class DPELGenConfig:
 
     dedup: bool = False  # global dedup handled by caller via dedup_set
     no_citations: bool = False  # forbid rule/section identifiers in Q/A text (tags allowed)
+    no_citations_in_question: bool = False  # QUESTION-only: forbid citation markers, rule/section numbers, passage IDs in the question
 
 
 # ---------------------------------------------------------------------
@@ -69,6 +70,7 @@ def build_dpel_prompt(
     max_per_persona: int,
     sample_n: int,
     no_citations: bool = False,
+    no_citations_in_question: bool = False,
 ) -> str:
     no_cite_clause = ""
     if no_citations:
@@ -76,6 +78,14 @@ def build_dpel_prompt(
             "NO-CITATIONS POLICY:\n"
             "- Do NOT include rule/section identifiers (e.g., 'Rule 3.4.1', 'Section 58(2)') in the QUESTION or ANSWER text.\n"
             "- Note: the bracketed tags [#SRC:...]/[#TGT:...] are required and are not considered citations.\n\n"
+        )
+    elif no_citations_in_question:
+        no_cite_clause = (
+            "NO-CITATIONS-IN-QUESTION POLICY:\n"
+            "- The QUESTION must not include explicit citation markers, rule numbers, section numbers, "
+            "article numbers, passage identifiers, document codes, or the provided reference string. "
+            "Ask about the compliance issue semantically rather than as a direct citation lookup. "
+            "This restriction applies only to the QUESTION; ANSWER evidence tags [#SRC:...]/[#TGT:...] are still required.\n\n"
         )
 
     return f"""
@@ -88,7 +98,12 @@ NON-NEGOTIABLE CONSTRAINTS:
 3.1) Fusion sentence: Include at least one explicit linkage that uses a non-overlapping detail from the other passage (e.g., a rule context, book boundary, timing clause, or measurement condition). If you cannot include such a linkage naturally, do not output the item.
 4) Actor fidelity: Use actor names exactly as written.
 5) No quotations: Do NOT copy sentences verbatim; paraphrase naturally. Do NOT invent citations or details not present in the passages.
-6) Abort rule: If you cannot craft a question that satisfies (1)–(3), output an empty array for that persona.
+6) Citation-free questions: The QUESTION must express the compliance information need semantically.
+   - Do NOT mention rule numbers, section numbers, article numbers, paragraph numbers, or any document/passage identifier (e.g., do not write "Rule 3.4", "Section 58(2)", "Article 12", "paragraph (b)", or the passage UIDs).
+   - Do NOT include document abbreviations, corpus codes, or the cross-reference string verbatim.
+   - Ask WHAT obligation/condition/procedure applies, not WHICH rule says it.
+   - The ANSWER must still contain [#SRC:{source_uid}] and [#TGT:{target_uid}] evidence tags.
+7) Abort rule: If you cannot craft a question that satisfies (1)–(3) and (6), output an empty array for that persona.
 
 {no_cite_clause}EVIDENCE TAGGING (MANDATORY IN THE ANSWER):
 - Tag SOURCE-backed sentences/clauses with [#SRC:{source_uid}].
@@ -111,7 +126,7 @@ PERSONA USE:
 - The answer style is always professional, regardless of persona.
 
 QUESTION REQUIREMENTS:
-- Natural compliance phrasing.
+- Natural compliance phrasing — ask about the substance and obligation, not the citation.
 - Questions may be longer (multi-clause or up to two sentences) when needed to encode scope, preconditions, exceptions, or timing.
 - Build the question so it naturally requires a detail from each passage.
 - Wording must not imply dependence on other rules (avoid “subject to other requirements” / “as set out elsewhere”).
@@ -215,6 +230,7 @@ def generate_qas_for_pair(
         max_per_persona=cfg.max_q_per_pair,
         sample_n=cfg.sample_n,
         no_citations=cfg.no_citations,
+        no_citations_in_question=cfg.no_citations_in_question,
     )
 
     res: LLMCallResult = call_json(

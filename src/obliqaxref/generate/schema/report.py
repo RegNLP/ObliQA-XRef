@@ -43,6 +43,12 @@ class SchemaRunReport:
     dropped_invalid: int = 0
     dropped_citations_policy: int = 0
 
+    # Citation leakage annotation / routing counters
+    generated_total: int = 0       # QAs that passed all other filters (before leakage action)
+    citation_leakage_count: int = 0  # items flagged with citation leakage
+    dropped_citation_leakage: int = 0  # items removed when action=filter
+    separated_citation_leakage: int = 0  # items written to citation_explicit file when action=separate
+
     # Run metadata
     extract_model: str | None = None
     gen_model: str | None = None
@@ -98,6 +104,19 @@ class SchemaRunReport:
         if model_fail:
             self.skipped_model_fail += 1
 
+    def merge_leakage_result(
+        self,
+        *,
+        generated_total: int = 0,
+        citation_leakage_count: int = 0,
+        dropped_citation_leakage: int = 0,
+        separated_citation_leakage: int = 0,
+    ) -> None:
+        self.generated_total += int(generated_total)
+        self.citation_leakage_count += int(citation_leakage_count)
+        self.dropped_citation_leakage += int(dropped_citation_leakage)
+        self.separated_citation_leakage += int(separated_citation_leakage)
+
     def as_dict(self) -> dict[str, Any]:
         d = {
             "rows_loaded": self.rows_loaded,
@@ -115,6 +134,10 @@ class SchemaRunReport:
             "dropped_missing_tags": self.dropped_missing_tags,
             "dropped_invalid": self.dropped_invalid,
             "dropped_citations_policy": self.dropped_citations_policy,
+            "generated_total": self.generated_total,
+            "citation_leakage_count": self.citation_leakage_count,
+            "dropped_citation_leakage": self.dropped_citation_leakage,
+            "separated_citation_leakage": self.separated_citation_leakage,
             "extract_model": self.extract_model,
             "gen_model": self.gen_model,
             "extract_temperature": self.extract_temperature,

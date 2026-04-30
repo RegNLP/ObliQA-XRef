@@ -257,6 +257,11 @@ class QAItem:
     gen_ts: int
     run_seed: int | None = None
 
+    # Citation leakage annotation (set by run.py after generation)
+    citation_leakage: bool = False
+    citation_leakage_matches: list[str] = field(default_factory=list)
+    citation_leakage_types: list[str] = field(default_factory=list)
+
     debug_context: dict[str, Any] = field(default_factory=dict)
 
 
@@ -370,6 +375,9 @@ def to_json(obj: Any) -> dict[str, Any]:
             "gen_model": obj.gen_model,
             "gen_ts": int(obj.gen_ts),
             "run_seed": obj.run_seed,
+            "citation_leakage": bool(obj.citation_leakage),
+            "citation_leakage_matches": list(obj.citation_leakage_matches or []),
+            "citation_leakage_types": list(obj.citation_leakage_types or []),
             "debug_context": dict(obj.debug_context or {}),
         }
 
@@ -427,5 +435,8 @@ def qa_item_from_json(d: dict[str, Any]) -> QAItem:
         gen_model=str(d.get("gen_model") or ""),
         gen_ts=int(d.get("gen_ts") or 0),
         run_seed=(int(d["run_seed"]) if d.get("run_seed") is not None else None),
+        citation_leakage=bool(d.get("citation_leakage", False)),
+        citation_leakage_matches=list(d.get("citation_leakage_matches") or []),
+        citation_leakage_types=list(d.get("citation_leakage_types") or []),
         debug_context=dict(d.get("debug_context") or {}),
     )

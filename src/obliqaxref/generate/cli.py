@@ -53,9 +53,23 @@ def generate(
     dedup: bool = typer.Option(True, "--dedup/--no-dedup"),
     drop_title_targets: bool = typer.Option(True, "--drop-title-targets/--keep-title-targets"),
     dual_anchors_mode: str = typer.Option(
-        "freeform_only", "--dual-anchors-mode", help="off | freeform_only | always"
+        "always", "--dual-anchors-mode", help="off | freeform_only | always"
     ),
-    no_citations: bool = typer.Option(False, "--no-citations"),
+    no_citations: bool = typer.Option(True, "--no-citations/--allow-citations"),
+    no_citations_in_question: bool | None = typer.Option(
+        None,
+        "--no-citations-in-question/--keep-citations-in-question",
+        help=(
+            "When set, overrides the config value for no_citations_in_question. "
+            "Default (None): use the value from the YAML config (default True). "
+            "Pass --no-citations-in-question to enable; --keep-citations-in-question to disable."
+        ),
+    ),
+    citation_leakage_action: str | None = typer.Option(
+        None,
+        "--citation-leakage-action",
+        help="Override citation_leakage_action from config: keep | filter | separate",
+    ),
 ) -> None:
     """Stage 1: Generate citation-dependent QA items (DPEL + SCHEMA)."""
     setup_logging(log_level)
@@ -63,6 +77,22 @@ def generate(
     logger.info("Loaded config: %s", config)
 
     from obliqaxref.generate.run import GenerateOverrides, run
+
+    # Resolve no_citations_in_question: CLI flag overrides config if explicitly provided
+    resolved_no_citations_in_question = (
+        no_citations_in_question
+        if no_citations_in_question is not None
+        else cfg.generation.no_citations_in_question
+    )
+    # Resolve citation_leakage_action: CLI overrides config if provided
+    resolved_citation_leakage_action = (
+        citation_leakage_action
+        if citation_leakage_action is not None
+        else cfg.generation.citation_leakage_action
+    )
+    # dual_anchors_mode and no_citations: CLI value wins (defaults match config defaults)
+    resolved_dual_anchors_mode = dual_anchors_mode
+    resolved_no_citations = no_citations
 
     o = GenerateOverrides(
         preset=preset,
@@ -77,8 +107,10 @@ def generate(
         max_q_per_pair=max_q_per_pair if max_q_per_pair is not None else 1,
         dedup=dedup,
         drop_title_targets=drop_title_targets,
-        dual_anchors_mode=dual_anchors_mode,
-        no_citations=no_citations,
+        dual_anchors_mode=resolved_dual_anchors_mode,
+        no_citations=resolved_no_citations,
+        no_citations_in_question=resolved_no_citations_in_question,
+        citation_leakage_action=resolved_citation_leakage_action,
     )
     run(cfg, o)
     logger.info("Generation complete. Outputs under: %s", cfg.paths.output_dir)

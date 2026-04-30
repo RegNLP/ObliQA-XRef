@@ -15,24 +15,37 @@ from __future__ import annotations
 
 from typing import Any
 
-QP_JUDGE_SYSTEM_PROMPT = """You are an expert evaluator for STRICTLY CITATION-DEPENDENT question–passage (QP) validation.
+QP_JUDGE_SYSTEM_PROMPT = """You are an expert evaluator for STRICTLY CITATION-DEPENDENT regulatory QA validation.
 
 You will be given:
 - SOURCE passage
 - TARGET passage
 - QUESTION
+- GOLD ANSWER
 
 This is a POST-IR quality check for a STRICTLY CITATION-DEPENDENT benchmark.
-Do NOT validate any gold answer.
 
-STRICT REQUIREMENT: TARGET must provide REQUIRED missing detail not in SOURCE.
-If SOURCE alone can fully answer the question, the item MUST be DROPped (not citation-dependent).
+STRICT REQUIREMENT: the item must genuinely require following the source-to-target cross-reference.
+Be conservative. Borderline cases fail unless citation dependency is clear.
 
-PASS_QP if ALL are true:
-1) QP alignment: The QUESTION is clearly about what SOURCE+TARGET discuss (no obvious actor/regime/condition mismatch).
-2) Citation dependency: SOURCE alone CANNOT fully answer the question (source_alone_insufficient=true)
-3) Target necessity: TARGET provides REQUIRED missing detail to answer the question
-4) Question quality: The QUESTION is understandable and specific enough to be evaluated.
+PASS only if ALL are true:
+1) SOURCE is relevant to the question.
+2) TARGET is relevant to the question.
+3) SOURCE alone is insufficient for a complete and correct answer.
+4) TARGET adds essential missing information.
+5) The item is citation-dependent: it requires using SOURCE context plus TARGET detail.
+6) The GOLD ANSWER is supported by SOURCE and TARGET, with no material hallucination.
+7) The question is realistic and well-formed for regulatory/compliance use.
+
+TARGET-alone check:
+- If TARGET alone answers the question without needing SOURCE-side regulatory context, set target_alone_sufficient=true.
+- target_alone_sufficient=true does not automatically fail, but it is evidence against citation dependency unless SOURCE still provides essential scope, actor, condition, or cross-reference context.
+
+Legacy compatibility:
+- Also set decision_qp = PASS_QP when passed=true, otherwise DROP_QP.
+- If source_alone_sufficient=true, decision_qp MUST be DROP_QP with reason_code_qp="QP_NOT_CIT_DEP".
+- If target_adds_essential_information=false or target is irrelevant, use reason_code_qp="QP_WRONG_TARGET".
+- If answer_supported=false, use reason_code_qp="QP_ILL_FORMED" unless another reason is clearly better.
 
 Example PASS_QP:
 - SOURCE: "Firms must maintain capital adequacy..." (mentions requirement but NO specifics)
@@ -57,6 +70,27 @@ Example DROP_QP with QP_NOT_CIT_DEP:
 Output MUST be a single JSON object and nothing else (no Markdown, no code fences).
 Schema:
 {
+  "judge_schema_version": "v2",
+  "passed": true or false,
+  "final_score": <integer 0-10>,
+  "subscores": {
+    "realism": <integer 0-10>,
+    "source_relevance": <integer 0-10>,
+    "target_relevance": <integer 0-10>,
+    "source_insufficiency": <integer 0-10>,
+    "target_necessity": <integer 0-10>,
+    "answer_support": <integer 0-10>
+  },
+  "binary_checks": {
+    "source_relevant": <bool>,
+    "target_relevant": <bool>,
+    "source_alone_sufficient": <bool>,
+    "target_alone_sufficient": <bool>,
+    "target_adds_essential_information": <bool>,
+    "answer_supported": <bool>,
+    "citation_dependent": <bool>
+  },
+  "reasons": [<short strings explaining failures or important support>],
   "decision_qp": "PASS_QP" or "DROP_QP",
   "reason_code_qp": <required if DROP_QP; null if PASS_QP>,
   "confidence": <float 0.0–1.0>,
@@ -68,7 +102,7 @@ Schema:
 }
 
 CRITICAL: If source_alone_insufficient=false, you MUST set decision_qp="DROP_QP" with reason_code_qp="QP_NOT_CIT_DEP".
-Only truly citation-dependent items (where source is insufficient) should PASS_QP.
+Only truly citation-dependent items should pass.
 """
 
 
@@ -76,6 +110,7 @@ def build_qp_judge_prompt(
     question: str,
     source_text: str,
     target_text: str,
+    gold_answer: str | None = None,
     source_passage_id: str | None = None,
     target_passage_id: str | None = None,
 ) -> str:
@@ -104,7 +139,10 @@ TARGET PASSAGE{target_label}:
 QUESTION:
 {question}
 
-Task: PASS_QP if TARGET is relevant and contributes at least one concrete detail useful to answer the QUESTION, and there is no clear scope mismatch.
+GOLD ANSWER:
+{gold_answer or ""}
+
+Task: Apply the strict v2 rubric. The item passes only when SOURCE and TARGET are both relevant, SOURCE alone is insufficient, TARGET adds essential missing information, the answer is supported, and the item genuinely requires following the source-to-target cross-reference.
 Return ONLY a single JSON object."""
 
     return prompt
@@ -168,6 +206,15 @@ def get_qp_json_schema() -> dict[str, Any]:
             "notes": {
                 "type": ["string", "null"],
                 "description": "Optional: Brief explanation of the decision",
+            },
+            "judge_schema_version": {"type": ["string", "null"]},
+            "passed": {"type": ["boolean", "null"]},
+            "final_score": {"type": ["integer", "null"], "minimum": 0, "maximum": 10},
+            "subscores": {"type": ["object", "null"]},
+            "binary_checks": {"type": ["object", "null"]},
+            "reasons": {
+                "type": ["array", "null"],
+                "items": {"type": "string"},
             },
         },
         "required": ["decision_qp", "confidence"],

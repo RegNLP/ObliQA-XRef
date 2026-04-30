@@ -7,6 +7,7 @@ This module provides:
 - answer tag enforcement ([#SRC:...] and [#TGT:...])
 - answer span validation (substring + offsets)
 - optional strict constraints (length bounds, no-citation policy)
+- structured citation leakage detection (detect_citation_leakage)
 
 No model calls. Deterministic and fast.
 """
@@ -56,6 +57,180 @@ def contains_citation_like_token(text: str) -> bool:
 
 
 # ---------------------------------------------------------------------
+# Structured citation leakage detection
+# ---------------------------------------------------------------------
+
+# Currency codes that share the ALL-CAPS format of regulatory corpus codes
+# but must NOT be flagged as corpus references (e.g. "GBP 3.5").
+_CURRENCY_CODES: frozenset[str] = frozenset(
+    {
+        "GBP", "USD", "EUR", "AED", "CHF", "JPY",
+        "CAD", "AUD", "NZD", "SGD", "HKD", "SEK",
+        "NOK", "DKK", "CNY", "INR", "BRL", "MXN",
+    }
+)
+
+# Each tuple: (pattern_name, leakage_type, compiled_regex)
+# Ordered from most specific to least specific.
+# Design rules:
+#   - Every pattern requires a leading keyword or ALL-CAPS acronym.
+#   - Plain numbers, dates, percentages, and monetary values are never matched.
+#   - part_ref / chapter_ref / schedule_ref require capital first letter to
+#     avoid matching common lowercase prose ("part of...", "chapter heading").
+_LEAKAGE_PATTERNS: list[tuple[str, str, re.Pattern[str]]] = [
+    # Rule 3.2.1 / Rules 3.2.1 (requires dotted number with ≥2 levels)
+    (
+        "rule_ref",
+        "rule_ref",
+        re.compile(r"\bRules?\s+\d+(?:\.\d+)+(?:\s*\(\w+\))*", re.IGNORECASE),
+    ),
+    # Section 58 / Section 58(2) / section 3.2.1
+    (
+        "section_ref",
+        "section_ref",
+        re.compile(r"\bSections?\s+\d+(?:\.\d+)*(?:\s*\(\w+\))?", re.IGNORECASE),
+    ),
+    # Article 12 / Article 3(1)
+    (
+        "article_ref",
+        "article_ref",
+        re.compile(r"\bArticles?\s+\d+(?:\.\d+)*(?:\s*\(\w+\))?", re.IGNORECASE),
+    ),
+    # paragraph (3) / paragraph 3 / paragraphs 3.1
+    (
+        "paragraph_ref",
+        "paragraph_ref",
+        re.compile(
+            r"\bparagraphs?\s*\(\d+\)|\bparagraphs?\s+\d+(?:\.\d+)*",
+            re.IGNORECASE,
+        ),
+    ),
+    # subsection 4 / subsection 3(a)
+    (
+        "subsection_ref",
+        "subsection_ref",
+        re.compile(r"\bsubsections?\s+\d+(?:\.\d+)*(?:\s*\(\w+\))?", re.IGNORECASE),
+    ),
+    # Part 2 / Part 3A — capital P only, avoids "part of something"
+    (
+        "part_ref",
+        "part_ref",
+        re.compile(r"\bParts?\s+\d+[A-Za-z]?\b"),
+    ),
+    # Chapter 5 — capital C
+    (
+        "chapter_ref",
+        "chapter_ref",
+        re.compile(r"\bChapters?\s+\d+(?:\.\d+)*\b"),
+    ),
+    # Schedule 1 — capital S
+    (
+        "schedule_ref",
+        "schedule_ref",
+        re.compile(r"\bSchedules?\s+\d+(?:\.\d+)*\b"),
+    ),
+    # Regulatory corpus codes: GEN 2.1.3 / COB 4.5.1 / AML 3.2.1
+    # Requires ALL-CAPS acronym (2–6 letters) + dotted number (≥2 levels).
+    # Currency codes (GBP, USD, …) are excluded via _CURRENCY_CODES.
+    (
+        "corpus_code",
+        "corpus_code",
+        re.compile(r"\b[A-Z]{2,6}\s+\d+\.\d+(?:\.\d+)*\b"),
+    ),
+]
+
+_NORMALIZE_STRIP_RE = re.compile(r"[().,;:'\"/\\]")
+_NORMALIZE_WS_RE = re.compile(r"[\s\-_]+")
+
+
+def _normalize_for_ref_check(text: str) -> str:
+    """Lowercase, strip punctuation, collapse whitespace for fuzzy reference matching."""
+    text = _NORMALIZE_STRIP_RE.sub("", text.lower().strip())
+    return _NORMALIZE_WS_RE.sub(" ", text).strip()
+
+
+def detect_citation_leakage(
+    question: str,
+    reference_text: str | None = None,
+) -> dict[str, Any]:
+    """Detect explicit citation-like references in *question*.
+
+    Looks for regulatory structural references (rule numbers, section IDs,
+    article numbers, corpus codes such as ``GEN 2.1.3``) that would indicate
+    the question leaks document-specific identifiers a retrieval system should
+    discover, not assume.
+
+    Conservative by design: requires a leading keyword or ALL-CAPS corpus
+    acronym before any number. Plain numbers, dates (``28 April 2026``),
+    percentages (``3.5%``), monetary values (``£12.50``), and quantity phrases
+    (``2 years``, ``3 business days``) are **not** flagged.
+
+    Args:
+        question: The generated question text to analyse.
+        reference_text: Optional raw reference string (e.g. a passage title or
+            cross-reference ID). When provided, a normalised substring check is
+            run to detect if the reference string itself was leaked verbatim
+            into the question.
+
+    Returns:
+        A dict with four keys:
+
+        * ``has_leakage`` (bool): ``True`` if any leakage was detected.
+        * ``matched_patterns`` (list[str]): Internal pattern names that fired.
+        * ``matched_spans`` (list[str]): Substrings of *question* that matched.
+        * ``leakage_type`` (list[str]): Semantic category for each unique match
+          type — one or more of: ``rule_ref``, ``section_ref``, ``article_ref``,
+          ``paragraph_ref``, ``subsection_ref``, ``part_ref``, ``chapter_ref``,
+          ``schedule_ref``, ``corpus_code``, ``reference_text``.
+    """
+    result: dict[str, Any] = {
+        "has_leakage": False,
+        "matched_patterns": [],
+        "matched_spans": [],
+        "leakage_type": [],
+    }
+
+    if not question or not question.strip():
+        return result
+
+    seen: set[tuple[str, str]] = set()
+
+    for pattern_name, leak_type, regex in _LEAKAGE_PATTERNS:
+        for m in regex.finditer(question):
+            span = m.group(0)
+
+            # False-positive guard: skip known currency codes that share the
+            # ALL-CAPS format of corpus codes (e.g. "GBP 3.5").
+            if pattern_name == "corpus_code":
+                code = span.split()[0]
+                if code in _CURRENCY_CODES:
+                    continue
+
+            key = (pattern_name, span)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            result["matched_patterns"].append(pattern_name)
+            result["matched_spans"].append(span)
+            if leak_type not in result["leakage_type"]:
+                result["leakage_type"].append(leak_type)
+
+    # Optional: check whether reference_text (normalised) appears in question.
+    if reference_text and reference_text.strip():
+        norm_q = _normalize_for_ref_check(question)
+        norm_ref = _normalize_for_ref_check(reference_text)
+        if norm_ref and norm_ref in norm_q:
+            result["matched_patterns"].append("reference_text_match")
+            result["matched_spans"].append(reference_text[:120])
+            if "reference_text" not in result["leakage_type"]:
+                result["leakage_type"].append("reference_text")
+
+    result["has_leakage"] = bool(result["matched_patterns"])
+    return result
+
+
+# ---------------------------------------------------------------------
 # Answer span validation
 # ---------------------------------------------------------------------
 def span_valid(span: AnswerSpan, target_text: str) -> bool:
@@ -92,6 +267,7 @@ def validate_qa_item(
     min_words: int = 50,
     max_words: int = 1000,
     no_citations: bool = False,
+    reference_text: str | None = None,
 ) -> QAValidationResult:
     errs: list[str] = []
 
@@ -128,6 +304,11 @@ def validate_qa_item(
             errs.append("citation_in_question")
         if contains_citation_like_token(qa.expected_answer or ""):
             errs.append("citation_in_answer")
+        # Structured leakage check: detects specific citation patterns (rule IDs,
+        # section numbers, corpus codes, etc.) in the question text.
+        leakage = detect_citation_leakage(qa.question or "", reference_text=reference_text)
+        if leakage["has_leakage"]:
+            errs.append("question_contains_citation_leakage")
 
     return QAValidationResult(ok=(len(errs) == 0), errors=errs)
 

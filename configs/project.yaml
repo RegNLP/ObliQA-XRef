@@ -107,6 +107,34 @@ generation:
   # Temperature for generation
   temperature: 0.0
 
+  # Citation-free question generation
+  # When true, the prompt instructs the model not to include citation markers, rule/section numbers,
+  # article numbers, passage identifiers, or document codes in the QUESTION text.
+  # Answer evidence tags [#SRC:...]/[#TGT:...] are always required and are not affected.
+  no_citations_in_question: true
+
+  # Action to take when detect_citation_leakage() flags a generated question after generation.
+  # Allowed values:
+  #   keep      - annotate all items with citation_leakage metadata but keep them in the main output (default)
+  #   filter    - remove flagged items from the main output entirely
+  #   separate  - remove flagged items from the main output and write them to
+  #               dpel/citation_explicit.qa.jsonl and schema/citation_explicit.qa.jsonl
+  citation_leakage_action: keep
+
+  # Strict no-citations policy: forbid rule numbers, section numbers, article numbers,
+  # paragraph numbers, passage identifiers, and document codes in both QUESTION and ANSWER prose.
+  # Bracketed evidence tags [#SRC:...]/[#TGT:...] are mandatory and are NOT affected by this flag.
+  no_citations: true
+
+  # Dual-anchor requirement for SCHEMA generation.
+  # Controls whether every question must depend on at least one concrete element from each passage.
+  # Allowed values:
+  #   always       - every question must hinge on ≥1 concrete source-side AND ≥1 concrete target-side
+  #                  element; if not naturally possible, output an empty array for that persona (default)
+  #   freeform_only - soft guidance applied only when no structured answer spans (DURATION/DATE/…) are present
+  #   off          - no dual-anchor constraint
+  dual_anchors_mode: always
+
   # Optional presets for quick testing
   # preset: smoke | dev | paper | full
   # smoke: 5 pairs, dev: 50 pairs, paper: 500 pairs, full: 1000 pairs
@@ -152,6 +180,10 @@ judge:
 # CURATION (Stage 3: IR Agreement + Judge)
 # =============================================================================
 curation:
+  # Which curated cohort should compatibility files final_benchmark.* expose.
+  # Explicit cohorts are always written as final_dependency_valid.* and final_answer_valid.*.
+  final_export_basis: answer_valid
+
   # IR ensemble agreement policy
   ir_agreement:
     # Top-K retrieval depth
@@ -188,6 +220,50 @@ curation:
 # Answer validation runs after curation judge.
 # Can be controlled via CLI flag: --skip-answer
 # No additional config required; uses same judge settings.
+
+# =============================================================================
+# PILOT MODE (Quick diagnostic run on a small subset)
+# =============================================================================
+# When pilot_mode=true, the pipeline samples a small number of cross-reference
+# rows per corpus and produces a quick diagnostic report without overwriting
+# full-run outputs.
+pilot:
+  # Set to true to activate pilot mode
+  pilot_mode: false
+
+  # Number of cross-reference rows to sample (per corpus)
+  pilot_n_xrefs_per_corpus: 50
+
+  # Random seed for reproducibility
+  pilot_random_seed: 13
+
+  # Suffix appended to output directories to avoid overwriting full-run outputs
+  pilot_output_suffix: pilot
+
+# =============================================================================
+# SAMPLING (Cross-reference row sampling strategy)
+# =============================================================================
+# Controls how cross-reference rows are selected before QA generation.
+# Default is "random" which preserves the original behavior exactly.
+sampling:
+  # Strategy: random | low_overlap | multi_ref_source | target_definition_or_condition | mixed_difficulty
+  #   random                        — uniform random sample (default; backward-compatible)
+  #   low_overlap                   — prefer source-target pairs with lowest Jaccard similarity
+  #   multi_ref_source              — prefer source passages that reference multiple targets
+  #   target_definition_or_condition — prefer targets with definition or condition cues
+  #   mixed_difficulty              — stratified sample across all difficulty buckets
+  sampling_mode: random
+
+  # Jaccard threshold below which a pair is flagged as "low overlap".
+  # Mean Jaccard for ADGM corpus ≈ 0.128 — 0.15 captures the lower ~68% of pairs.
+  max_jaccard_for_low_overlap: 0.15
+
+  # Bucket weights for mixed_difficulty mode (normalized to sum to 1.0 internally).
+  mixed_difficulty_bucket_weights:
+    low_overlap: 0.30
+    multi_ref: 0.20
+    definition_condition: 0.30
+    random: 0.20
 
 # =============================================================================
 # NOTES

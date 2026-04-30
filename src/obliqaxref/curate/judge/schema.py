@@ -15,12 +15,14 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
+JUDGE_SCHEMA_VERSION = "v2"
+
 
 # ---------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------
 class QPDecision(str, Enum):
-    """Question-passage validation decision (answer-agnostic)."""
+    """Question-passage validation decision."""
 
     PASS_QP = "PASS_QP"  # Question-passage alignment valid
     DROP_QP = "DROP_QP"  # Failed QP validation
@@ -50,10 +52,10 @@ class QPReasonCode(str, Enum):
 @dataclass
 class JudgeQueueItem:
     """
-    Input record for judge LLM evaluation (answer-agnostic).
+    Input record for judge LLM evaluation.
 
     Represents a single item that needs QP validation.
-    Does NOT include gold_answer - this is handled in a separate validation step.
+    Includes gold_answer only for answer-support auditing under the strict v2 rubric.
     """
 
     item_id: str
@@ -62,6 +64,7 @@ class JudgeQueueItem:
     source_text: str
     target_passage_id: str
     target_text: str
+    gold_answer: str | None = None
     ir_votes: dict[str, Any] | None = None  # Optional audit info from IR voting
     metadata: dict[str, Any] | None = None
 
@@ -87,10 +90,21 @@ class JudgeResponse:
     decision_qp: QPDecision
     reason_code_qp: QPReasonCode | None = None  # Required if DROP_QP
     confidence: float = 0.0  # 0.0-1.0
+    judge_schema_version: str = JUDGE_SCHEMA_VERSION
+    passed: bool | None = None
+    final_score: int | None = None
+    subscores: dict[str, int] | None = None
+    binary_checks: dict[str, bool] | None = None
     source_alone_insufficient: bool | None = None  # Does source alone fail to answer?
+    source_alone_sufficient: bool | None = None
+    target_alone_sufficient: bool | None = None
+    target_adds_essential_information: bool | None = None
+    citation_dependent: bool | None = None
+    answer_supported_by_judge: bool | None = None
     target_contains_missing_detail: bool | None = None
     question_well_formed: bool | None = None
     key_missing_detail: str | None = None
+    reasons: list[str] | None = None
     support_snippets: list[str] | None = None
     notes: str | None = None
 
@@ -118,6 +132,29 @@ class JudgeResponse:
         if self.decision_qp == QPDecision.PASS_QP and self.source_alone_insufficient is False:
             raise ValueError(
                 "Items where source alone is sufficient should be DROPped with QP_NOT_CIT_DEP, not PASS_QP"
+            )
+
+        if self.final_score is not None:
+            self.final_score = max(0, min(10, int(self.final_score)))
+
+        if self.passed is None:
+            self.passed = self.decision_qp == QPDecision.PASS_QP
+
+        if self.binary_checks:
+            self.source_alone_sufficient = self.binary_checks.get(
+                "source_alone_sufficient", self.source_alone_sufficient
+            )
+            self.target_alone_sufficient = self.binary_checks.get(
+                "target_alone_sufficient", self.target_alone_sufficient
+            )
+            self.target_adds_essential_information = self.binary_checks.get(
+                "target_adds_essential_information", self.target_adds_essential_information
+            )
+            self.citation_dependent = self.binary_checks.get(
+                "citation_dependent", self.citation_dependent
+            )
+            self.answer_supported_by_judge = self.binary_checks.get(
+                "answer_supported", self.answer_supported_by_judge
             )
 
         # Normalize support snippets: keep it compact and ensure list-of-str
@@ -161,6 +198,15 @@ class AggregatedJudgeResponse:
     confidence_mean: float = 0.0
     weighted_fraction: float = 0.0
     flag_low_consensus: bool = False
+    judge_schema_version: str = JUDGE_SCHEMA_VERSION
+    passed: bool | None = None
+    final_score: int | None = None
+    source_alone_sufficient: bool | None = None
+    target_alone_sufficient: bool | None = None
+    target_adds_essential_information: bool | None = None
+    citation_dependent: bool | None = None
+    answer_supported_by_judge: bool | None = None
+    failure_flags: dict[str, bool] | None = None
     runs: list[dict[str, Any]] | None = (
         None  # Audit trail: [{decision, reason, confidence, citation_type}, ...]
     )

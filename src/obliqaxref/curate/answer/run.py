@@ -201,11 +201,22 @@ def aggregate_answer_passes(item_id: str, passes: list[AnswerResponse]) -> Aggre
         majority_strength < 0.67 or weighted_fraction < 0.70 or confidence_mean < 0.75
     )
 
+    def _majority_bool(values: list[bool | None]) -> bool | None:
+        concrete = [v for v in values if v is not None]
+        if not concrete:
+            return None
+        return sum(1 for v in concrete if v) >= (len(concrete) / 2)
+
     runs = [
         {
             "decision_ans": p.decision_ans.value,
             "reason_code_ans": p.reason_code_ans.value if p.reason_code_ans else None,
             "confidence": p.confidence,
+            "answer_addresses_question": p.answer_addresses_question,
+            "answer_grounded_in_passages": p.answer_grounded_in_passages,
+            "tags_present_for_both": p.tags_present_for_both,
+            "hallucination_detected": p.hallucination_detected,
+            "notes": p.notes,
         }
         for p in passes
     ]
@@ -220,6 +231,10 @@ def aggregate_answer_passes(item_id: str, passes: list[AnswerResponse]) -> Aggre
         confidence_mean=round(confidence_mean, 3),
         weighted_fraction=round(weighted_fraction, 3),
         flag_low_consensus=flag_low_consensus,
+        answer_responsive=_majority_bool([p.answer_addresses_question for p in passes]),
+        answer_supported=_majority_bool([p.answer_grounded_in_passages for p in passes]),
+        tags_present_for_both=_majority_bool([p.tags_present_for_both for p in passes]),
+        hallucination_detected=_majority_bool([p.hallucination_detected for p in passes]),
         runs=runs,
     )
 
@@ -304,11 +319,10 @@ def call_answer_llm_once(
 
 
 def run_answer_validation(cfg: RunConfig) -> None:
-    """Run answer validation on all PASS items (IR KEEP + JUDGE PASS)."""
+    """Run answer validation on citation-dependency PASS items."""
 
     curate_out = Path(cfg.paths.curate_output_dir or cfg.paths.output_dir)
     judge_pass_file = curate_out / "curate_judge" / "judge_responses_pass.jsonl"
-    keep_file = curate_out / "curated_items.keep.jsonl"
     items_file = Path(cfg.paths.output_dir) / "generator" / "items.jsonl"
     passages_file = Path(cfg.paths.input_dir) / "passage_corpus.jsonl"
 
@@ -319,18 +333,12 @@ def run_answer_validation(cfg: RunConfig) -> None:
         logger.warning("Passage corpus not found: %s", passages_file)
         return
 
-    # Collect PASS item_ids from IR KEEP and JUDGE PASS
-    pass_ids: list[str] = []
-    if keep_file.exists():
-        with open(keep_file, encoding="utf-8") as f:
-            for line in f:
-                obj = json.loads(line)
-                if obj.get("decision") == "KEEP" or obj.get("decision_ir") == "KEEP":
-                    iid = obj.get("item_id")
-                    if iid:
-                        pass_ids.append(iid)
-    if judge_pass_file.exists():
-        pass_ids.extend(load_pass_items(judge_pass_file))
+    if not judge_pass_file.exists():
+        logger.info("No judge PASS file found for answer validation: %s", judge_pass_file)
+        return
+
+    # Collect PASS item_ids from the citation-dependency judge only.
+    pass_ids: list[str] = load_pass_items(judge_pass_file)
 
     # Deduplicate ids
     pass_ids = list(dict.fromkeys(pass_ids))

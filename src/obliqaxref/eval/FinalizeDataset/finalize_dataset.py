@@ -5,8 +5,8 @@ Finalize dataset from curated PASS cohorts, then split into train/dev/test.
 What it does now (revised):
 - Loads curated items from runs/curate_{corpus}/out
 - Cohorts supported:
-    - answer_pass: items that passed answer validation (curate_answer PASS)
-    - keep_judgepass: IR KEEP union JUDGE PASS (before answer validation)
+    - answer_valid / answer_pass: judge PASS ∩ answer PASS
+    - dependency_valid / keep_judgepass: judge PASS, before answer validation
 - Extracts required fields for downstream IR/answer evaluation
 - Randomly splits 70/15/15 (deterministic seed) unless a 'split' field is present
 - Writes ObliQA-XRef-{CORPUS}-ALL.jsonl and split files under out_dir
@@ -155,41 +155,64 @@ def _load_passage_map(corpus: str) -> dict[str, str]:
 def finalize_dataset_main(
     out_dir: str = "ObliQA-XRef_Out_Datasets",
     corpus: str = "adgm",
-    cohort: str = "answer_pass",  # or "keep_judgepass"
+    cohort: str = "answer_valid",
     seed: int = 42,
 ):
     """
     Build finalized dataset from curated PASS cohorts.
 
-    Inputs are inferred from runs/curate_{corpus}/out:
-      - curated_items.keep.jsonl
-      - curated_items.judge.jsonl + curate_judge/judge_responses_pass.jsonl
-      - curate_answer/answer_responses_pass.jsonl (when cohort == 'answer_pass')
+    Inputs are inferred from runs/curate_{corpus}/out. The preferred inputs are
+    the explicit final export cohorts written by curation:
+      - final_answer_valid.jsonl
+      - final_dependency_valid.jsonl
+    Legacy cohort names are accepted as aliases.
     """
     c = corpus.lower()
     curate_root = Path(f"runs/curate_{c}/out")
 
-    # Load KEEP and JUDGE items
-    keep_items = _read_jsonl(curate_root / "curated_items.keep.jsonl")
-    judge_items_all = _read_jsonl(curate_root / "curated_items.judge.jsonl")
-
-    # Determine JUDGE PASS set
-    judge_pass_ids = _read_ids_jsonl(curate_root / "curate_judge" / "judge_responses_pass.jsonl")
-    judge_pass_items = [it for it in judge_items_all if it.get("item_id") in judge_pass_ids]
-
-    # Base cohort = KEEP ∪ JUDGE_PASS
-    base_items = {it["item_id"]: it for it in keep_items}
-    for it in judge_pass_items:
-        base_items[it["item_id"]] = it
-
-    # If answer_pass, filter to answer PASS ids
-    if cohort == "answer_pass":
-        ans_pass_ids = _read_ids_jsonl(
-            curate_root / "curate_answer" / "answer_responses_pass.jsonl"
+    cohort_aliases = {
+        "answer_pass": "answer_valid",
+        "answer_valid": "answer_valid",
+        "keep_judgepass": "dependency_valid",
+        "dependency_valid": "dependency_valid",
+    }
+    normalized_cohort = cohort_aliases.get(cohort)
+    if normalized_cohort is None:
+        raise ValueError(
+            "cohort must be one of: answer_valid, dependency_valid, "
+            "answer_pass, keep_judgepass"
         )
-        selected = [base_items[iid] for iid in ans_pass_ids if iid in base_items]
+
+    explicit_file = curate_root / f"final_{normalized_cohort}.jsonl"
+    if explicit_file.exists():
+        selected = _read_jsonl(explicit_file)
     else:
-        selected = list(base_items.values())
+        # Fallback for older curation outputs: reconstruct from judge PASS and
+        # answer PASS, without using IR keep/drop files as selection criteria.
+        judge_items_all = _read_jsonl(curate_root / "curated_items.judge.jsonl")
+
+        judge_pass_ids = _read_ids_jsonl(
+            curate_root / "curate_judge" / "judge_responses_pass.jsonl"
+        )
+        judge_pass_items_by_id = {
+            it.get("item_id"): it for it in judge_items_all if it.get("item_id") in judge_pass_ids
+        }
+
+        if normalized_cohort == "answer_valid":
+            ans_pass_ids = _read_ids_jsonl(
+                curate_root / "curate_answer" / "answer_responses_pass.jsonl"
+            )
+            selected = [
+                judge_pass_items_by_id[iid]
+                for iid in sorted(judge_pass_ids & ans_pass_ids)
+                if iid in judge_pass_items_by_id
+            ]
+        else:
+            selected = [
+                judge_pass_items_by_id[iid]
+                for iid in sorted(judge_pass_ids)
+                if iid in judge_pass_items_by_id
+            ]
 
     # Backfill passage texts from adapter corpus if missing
     pid2text = _load_passage_map(c)
@@ -235,7 +258,10 @@ def finalize_dataset_main(
         for name, items in m_splits.items():
             _write_jsonl(items, out_root / f"ObliQA-XRef-{corpus_tag}-{mtag_clean}-ALL-{name}.jsonl")
 
-    print(f"✓ Dataset finalized from cohort='{cohort}': {len(records)} items total")
+    print(
+        f"✓ Dataset finalized from cohort='{cohort}' "
+        f"(basis='{normalized_cohort}'): {len(records)} items total"
+    )
     for mtag, recs in method_groups.items():
         print(f"  - {corpus_tag}/{mtag}: {len(recs)} items")
 
@@ -248,8 +274,8 @@ if __name__ == "__main__":
     ap.add_argument("--corpus", default="adgm", choices=["adgm", "ukfin"], help="Corpus")
     ap.add_argument(
         "--cohort",
-        default="answer_pass",
-        choices=["answer_pass", "keep_judgepass"],
+        default="answer_valid",
+        choices=["answer_valid", "dependency_valid", "answer_pass", "keep_judgepass"],
         help="Which curated cohort to finalize",
     )
     ap.add_argument("--seed", type=int, default=42, help="Random seed for splitting")

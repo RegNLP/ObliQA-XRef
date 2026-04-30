@@ -114,9 +114,9 @@ def main():
     )
     finalize_parser.add_argument(
         "--cohort",
-        default="answer_pass",
-        choices=["answer_pass", "keep_judgepass"],
-        help="Which curated cohort to finalize (default: answer_pass)",
+        default="answer_valid",
+        choices=["answer_valid", "dependency_valid", "answer_pass", "keep_judgepass"],
+        help="Which curated cohort to finalize (default: answer_valid)",
     )
     finalize_parser.add_argument(
         "--seed",
@@ -153,9 +153,9 @@ def main():
     )
     prep_parser.add_argument(
         "--cohort",
-        default="answer_pass",
-        choices=["answer_pass", "keep_judgepass"],
-        help="Which curated cohort to finalize (default: answer_pass)",
+        default="answer_valid",
+        choices=["answer_valid", "dependency_valid", "answer_pass", "keep_judgepass"],
+        help="Which curated cohort to finalize (default: answer_valid)",
     )
     prep_parser.add_argument(
         "--seed", type=int, default=42, help="Random seed for splitting (default: 42)"
@@ -295,7 +295,7 @@ def main():
             finalize_dataset_main(
                 out_dir=str(out_root),
                 corpus=corpus,
-                cohort="answer_pass",
+                cohort="answer_valid",
             )
             staged_dir = _stage_dataset_layout(corpus, out_root)
 

@@ -39,6 +39,53 @@ class GenerationConfig(BaseModel):
     qas_per_edge: int = 1
     llm_backend: str = Field("none", description="none | openai | azure | ...")
     temperature: float = 0.2
+    no_citations: bool = Field(
+        True,
+        description=(
+            "When True, the generation prompt forbids rule numbers, section numbers, article numbers, "
+            "paragraph numbers, passage identifiers, and document codes in both the QUESTION and ANSWER prose. "
+            "Bracketed evidence tags [#SRC:...]/[#TGT:...] are mandatory and are not affected by this flag."
+        ),
+    )
+    no_citations_in_question: bool = Field(
+        True,
+        description=(
+            "When True, the generation prompt instructs the model not to include citation markers, "
+            "rule/section numbers, article numbers, passage identifiers, or document codes in the QUESTION. "
+            "Answer evidence tags [#SRC:...]/[#TGT:...] are still required."
+        ),
+    )
+    citation_leakage_action: str = Field(
+        "keep",
+        description=(
+            "Action to take when citation leakage is detected in a generated question. "
+            "Allowed values: 'keep' (annotate only), 'filter' (remove from output), "
+            "'separate' (write to citation_explicit.qa.jsonl instead of the main file)."
+        ),
+    )
+    dual_anchors_mode: str = Field(
+        "always",
+        description=(
+            "Controls the dual-anchor requirement for SCHEMA generation. "
+            "'always': every question must depend on at least one concrete element from each passage; "
+            "'freeform_only': soft guidance applied only when no structured answer spans are present; "
+            "'off': no dual-anchor constraint."
+        ),
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        valid_actions = {"keep", "filter", "separate"}
+        if self.citation_leakage_action not in valid_actions:
+            raise ValueError(
+                f"citation_leakage_action must be one of {sorted(valid_actions)!r}, "
+                f"got {self.citation_leakage_action!r}"
+            )
+        valid_modes = {"always", "freeform_only", "off"}
+        if self.dual_anchors_mode not in valid_modes:
+            raise ValueError(
+                f"dual_anchors_mode must be one of {sorted(valid_modes)!r}, "
+                f"got {self.dual_anchors_mode!r}"
+            )
 
 
 class IRAgreementConfig(BaseModel):
@@ -69,6 +116,18 @@ class JudgeConfig(BaseModel):
 class CurationConfig(BaseModel):
     ir_agreement: IRAgreementConfig = Field(default_factory=IRAgreementConfig)
     judge: JudgeConfig = Field(default_factory=JudgeConfig)
+    final_export_basis: str = Field(
+        "answer_valid",
+        description="Final compatibility export basis: dependency_valid | answer_valid",
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        valid = {"dependency_valid", "answer_valid"}
+        if self.final_export_basis not in valid:
+            raise ValueError(
+                f"final_export_basis must be one of {sorted(valid)!r}, "
+                f"got {self.final_export_basis!r}"
+            )
 
 
 class EvalConfig(BaseModel):
@@ -82,6 +141,54 @@ class ReportConfig(BaseModel):
     render_html: bool = True
 
 
+class PilotConfig(BaseModel):
+    pilot_mode: bool = False
+    pilot_n_xrefs_per_corpus: int = 50
+    pilot_random_seed: int = 13
+    pilot_output_suffix: str = "pilot"
+
+
+class SamplingConfig(BaseModel):
+    sampling_mode: str = Field(
+        "random",
+        description=(
+            "Cross-reference row sampling strategy. "
+            "'random': uniform random sample (default, backward-compatible). "
+            "'low_overlap': prefer source-target pairs with low lexical overlap. "
+            "'multi_ref_source': prefer source passages referencing multiple targets. "
+            "'target_definition_or_condition': prefer targets with definition/condition cues. "
+            "'mixed_difficulty': stratified sample across all difficulty buckets."
+        ),
+    )
+    max_jaccard_for_low_overlap: float = Field(
+        0.15,
+        description=(
+            "Jaccard similarity threshold below which a source-target pair is considered "
+            "'low overlap'. Used by low_overlap and mixed_difficulty modes."
+        ),
+    )
+    mixed_difficulty_bucket_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "low_overlap": 0.30,
+            "multi_ref": 0.20,
+            "definition_condition": 0.30,
+            "random": 0.20,
+        },
+        description=(
+            "Relative weights for each bucket in mixed_difficulty mode. "
+            "Keys: low_overlap, multi_ref, definition_condition, random. "
+            "Weights are normalized internally to sum to 1.0."
+        ),
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        _valid = {"random", "low_overlap", "multi_ref_source", "target_definition_or_condition", "mixed_difficulty"}
+        if self.sampling_mode not in _valid:
+            raise ValueError(
+                f"sampling_mode must be one of {sorted(_valid)!r}, got {self.sampling_mode!r}"
+            )
+
+
 class RunConfig(BaseModel):
     run_id: str = "dev"
     paths: PathsConfig
@@ -90,6 +197,8 @@ class RunConfig(BaseModel):
     curation: CurationConfig = Field(default_factory=CurationConfig)
     evaluation: EvalConfig = Field(default_factory=EvalConfig)
     reporting: ReportConfig = Field(default_factory=ReportConfig)
+    pilot: PilotConfig = Field(default_factory=PilotConfig)
+    sampling: SamplingConfig = Field(default_factory=SamplingConfig)
 
 
 def load_config(path: str | Path) -> RunConfig:

@@ -82,8 +82,12 @@ def _setup_curate_out(
     *,
     judge_pass: list[str],
     answer_pass: list[str],
+    answer_drop: list[str] | None = None,
     ir_items: list[dict],
     gen_items: list[dict],
+    keep_items: list[dict] | None = None,
+    judge_metadata: list[dict] | None = None,
+    answer_metadata: list[dict] | None = None,
 ) -> tuple[Path, Path]:
     """Write fixture files and return (curate_out, items_file)."""
     curate_out = tmp_path / "curate"
@@ -103,6 +107,16 @@ def _setup_curate_out(
         answer_dir / "answer_responses_pass.jsonl",
         [{"item_id": iid, "decision_ans_final": "PASS_ANS"} for iid in answer_pass],
     )
+    _write_jsonl(
+        answer_dir / "answer_responses_drop.jsonl",
+        [{"item_id": iid, "decision_ans_final": "DROP_ANS"} for iid in (answer_drop or [])],
+    )
+    if judge_metadata is not None:
+        _write_jsonl(judge_dir / "judge_responses_aggregated.jsonl", judge_metadata)
+    if answer_metadata is not None:
+        _write_jsonl(answer_dir / "answer_responses_aggregated.jsonl", answer_metadata)
+    if keep_items is not None:
+        _write_jsonl(curate_out / "curated_items.keep.jsonl", keep_items)
 
     # curated_items.judge.jsonl
     _write_jsonl(curate_out / "curated_items.judge.jsonl", ir_items)
@@ -154,7 +168,7 @@ class TestAssembleFinalBenchmark:
         assert stats["total_final"] == 1
         assert stats["total_hard"] == 0
 
-    def test_all_four_output_files_created(self, tmp_path):
+    def test_explicit_and_compatibility_output_files_created(self, tmp_path):
         curate_out, items_file = _setup_curate_out(
             tmp_path,
             judge_pass=["q1"],
@@ -171,10 +185,15 @@ class TestAssembleFinalBenchmark:
         )
         assemble_final_benchmark(curate_out, items_file)
 
-        assert (curate_out / "final_benchmark.jsonl").exists()
-        assert (curate_out / "final_benchmark.csv").exists()
-        assert (curate_out / "final_hard.jsonl").exists()
-        assert (curate_out / "final_hard.csv").exists()
+        for stem in (
+            "final_dependency_valid",
+            "final_answer_valid",
+            "final_answer_failed",
+            "final_benchmark",
+            "final_hard",
+        ):
+            assert (curate_out / f"{stem}.jsonl").exists()
+            assert (curate_out / f"{stem}.csv").exists()
         assert (curate_out / "final_benchmark_stats.json").exists()
 
     # --- intersection logic ---
@@ -203,6 +222,178 @@ class TestAssembleFinalBenchmark:
         items = _read_jsonl(curate_out / "final_benchmark.jsonl")
         ids = {item["item_id"] for item in items}
         assert ids == {"q1"}
+
+    def test_judge_pass_answer_pass_goes_to_final_answer_valid(self, tmp_path):
+        curate_out, items_file = _setup_curate_out(
+            tmp_path,
+            judge_pass=["q1"],
+            answer_pass=["q1"],
+            ir_items=[{"item_id": "q1", "ir_difficulty_label": "easy"}],
+            gen_items=[{
+                "item_id": "q1",
+                "question": "Q1",
+                "gold_answer": "A [#SRC:s1] [#TGT:t1]",
+                "source_passage_id": "s1",
+                "target_passage_id": "t1",
+            }],
+        )
+        assemble_final_benchmark(curate_out, items_file)
+
+        answer_valid_ids = {it["item_id"] for it in _read_jsonl(curate_out / "final_answer_valid.jsonl")}
+        assert answer_valid_ids == {"q1"}
+
+    def test_judge_pass_answer_fail_goes_to_final_answer_failed(self, tmp_path):
+        curate_out, items_file = _setup_curate_out(
+            tmp_path,
+            judge_pass=["q1"],
+            answer_pass=[],
+            answer_drop=["q1"],
+            ir_items=[{"item_id": "q1", "ir_difficulty_label": "medium"}],
+            gen_items=[{
+                "item_id": "q1",
+                "question": "Q1",
+                "gold_answer": "A [#SRC:s1] [#TGT:t1]",
+                "source_passage_id": "s1",
+                "target_passage_id": "t1",
+            }],
+        )
+        assemble_final_benchmark(curate_out, items_file)
+
+        answer_valid = _read_jsonl(curate_out / "final_answer_valid.jsonl")
+        answer_failed_ids = {
+            it["item_id"] for it in _read_jsonl(curate_out / "final_answer_failed.jsonl")
+        }
+        assert answer_valid == []
+        assert answer_failed_ids == {"q1"}
+
+    def test_judge_drop_excluded_from_dependency_and_answer_valid(self, tmp_path):
+        curate_out, items_file = _setup_curate_out(
+            tmp_path,
+            judge_pass=["q_pass"],
+            answer_pass=["q_pass", "q_drop"],
+            ir_items=[
+                {"item_id": "q_pass", "ir_difficulty_label": "easy"},
+                {"item_id": "q_drop", "ir_difficulty_label": "hard"},
+            ],
+            gen_items=[
+                {"item_id": "q_pass", "question": "Q", "gold_answer": "A",
+                 "source_passage_id": "s", "target_passage_id": "t"},
+                {"item_id": "q_drop", "question": "Q", "gold_answer": "A",
+                 "source_passage_id": "s", "target_passage_id": "t"},
+            ],
+        )
+        assemble_final_benchmark(curate_out, items_file)
+
+        dependency_ids = {
+            it["item_id"] for it in _read_jsonl(curate_out / "final_dependency_valid.jsonl")
+        }
+        answer_ids = {
+            it["item_id"] for it in _read_jsonl(curate_out / "final_answer_valid.jsonl")
+        }
+        assert dependency_ids == {"q_pass"}
+        assert answer_ids == {"q_pass"}
+
+    def test_hard_valid_cases_are_retained_in_answer_valid(self, tmp_path):
+        curate_out, items_file = _setup_curate_out(
+            tmp_path,
+            judge_pass=["q_hard"],
+            answer_pass=["q_hard"],
+            ir_items=[{
+                "item_id": "q_hard",
+                "ir_difficulty_label": "hard",
+                "source_vote_count": 1,
+                "target_vote_count": 1,
+                "both_vote_count": 0,
+            }],
+            gen_items=[{
+                "item_id": "q_hard",
+                "question": "Q",
+                "gold_answer": "A",
+                "source_passage_id": "s",
+                "target_passage_id": "t",
+            }],
+        )
+        assemble_final_benchmark(curate_out, items_file)
+
+        item = _read_jsonl(curate_out / "final_answer_valid.jsonl")[0]
+        assert item["item_id"] == "q_hard"
+        assert item["difficulty_tier"] == "challenging"
+
+    def test_stale_keep_file_does_not_control_final_export(self, tmp_path):
+        curate_out, items_file = _setup_curate_out(
+            tmp_path,
+            judge_pass=["q_pass"],
+            answer_pass=["q_pass"],
+            keep_items=[{"item_id": "q_keep_only", "decision": "KEEP"}],
+            ir_items=[
+                {"item_id": "q_pass", "ir_difficulty_label": "easy"},
+                {"item_id": "q_keep_only", "ir_difficulty_label": "easy"},
+            ],
+            gen_items=[
+                {"item_id": "q_pass", "question": "Q", "gold_answer": "A",
+                 "source_passage_id": "s", "target_passage_id": "t"},
+                {"item_id": "q_keep_only", "question": "Q", "gold_answer": "A",
+                 "source_passage_id": "s", "target_passage_id": "t"},
+            ],
+        )
+        assemble_final_benchmark(curate_out, items_file)
+
+        dependency_ids = {
+            it["item_id"] for it in _read_jsonl(curate_out / "final_dependency_valid.jsonl")
+        }
+        answer_ids = {
+            it["item_id"] for it in _read_jsonl(curate_out / "final_answer_valid.jsonl")
+        }
+        assert dependency_ids == {"q_pass"}
+        assert answer_ids == {"q_pass"}
+
+    def test_answer_and_judge_metadata_are_exported(self, tmp_path):
+        curate_out, items_file = _setup_curate_out(
+            tmp_path,
+            judge_pass=["q1"],
+            answer_pass=["q1"],
+            ir_items=[{"item_id": "q1", "ir_difficulty_label": "easy"}],
+            gen_items=[{
+                "item_id": "q1",
+                "question": "Q",
+                "gold_answer": "Answer with [#SRC:s1] [#TGT:t1]",
+                "source_passage_id": "s1",
+                "target_passage_id": "t1",
+            }],
+            judge_metadata=[{
+                "item_id": "q1",
+                "judge_schema_version": "v2",
+                "source_alone_sufficient": False,
+                "target_alone_sufficient": False,
+                "target_adds_essential_information": True,
+                "citation_dependent": True,
+                "answer_supported_by_judge": True,
+            }],
+            answer_metadata=[{
+                "item_id": "q1",
+                "decision_ans_final": "PASS_ANS",
+                "confidence_mean": 0.91,
+                "answer_responsive": True,
+                "answer_supported": True,
+                "runs": [{"notes": "grounded"}],
+            }],
+        )
+        assemble_final_benchmark(curate_out, items_file)
+
+        item = _read_jsonl(curate_out / "final_answer_valid.jsonl")[0]
+        assert item["answer_validation_passed"] is True
+        assert item["answer_validation_score"] == 0.91
+        assert item["answer_validation_reasons"] == ["grounded"]
+        assert item["missing_source_tag"] is False
+        assert item["missing_target_tag"] is False
+        assert item["answer_responsive"] is True
+        assert item["answer_supported"] is True
+        assert item["judge_schema_version"] == "v2"
+        assert item["source_alone_sufficient"] is False
+        assert item["target_alone_sufficient"] is False
+        assert item["target_adds_essential_information"] is True
+        assert item["citation_dependent"] is True
+        assert item["answer_supported_by_judge"] is True
 
     def test_no_overlap_returns_empty_benchmark(self, tmp_path):
         curate_out, items_file = _setup_curate_out(
@@ -422,7 +613,7 @@ class TestAssembleFinalBenchmark:
         result = assemble_final_benchmark(curate_out, items_file)
         assert result == {}
 
-    def test_missing_answer_pass_file_returns_empty(self, tmp_path):
+    def test_missing_answer_pass_file_still_writes_dependency_valid(self, tmp_path):
         curate_out = tmp_path / "curate"
         judge_dir = curate_out / "curate_judge"
         judge_dir.mkdir(parents=True)
@@ -434,7 +625,10 @@ class TestAssembleFinalBenchmark:
         items_file.write_text("")
 
         result = assemble_final_benchmark(curate_out, items_file)
-        assert result == {}
+        assert result["final_dependency_valid_count"] == 1
+        assert result["final_answer_valid_count"] == 0
+        assert _read_jsonl(curate_out / "final_dependency_valid.jsonl")[0]["item_id"] == "q1"
+        assert _read_jsonl(curate_out / "final_answer_valid.jsonl") == []
 
     # --- stats structure ---
 
@@ -454,8 +648,18 @@ class TestAssembleFinalBenchmark:
                         "method": "dpel", "pair_uid": "p1"}],
         )
         stats = assemble_final_benchmark(curate_out, items_file)
-        for key in ("total_final", "total_hard", "difficulty_tier_counts",
-                    "ir_difficulty_label_counts"):
+        for key in (
+            "generated_count",
+            "citation_dependency_passed_count",
+            "answer_validation_passed_count",
+            "answer_validation_failed_count",
+            "final_dependency_valid_count",
+            "final_answer_valid_count",
+            "total_final",
+            "total_hard",
+            "difficulty_tier_counts",
+            "ir_difficulty_label_counts",
+        ):
             assert key in stats, f"Missing key: {key}"
 
     def test_stats_json_persisted_correctly(self, tmp_path):

@@ -92,6 +92,11 @@ class AggregatedAnswerResponse:
     confidence_mean: float = 0.0
     weighted_fraction: float = 0.0
     flag_low_consensus: bool = False
+    answer_responsive: bool | None = None
+    answer_supported: bool | None = None
+    tags_present_for_both: bool | None = None
+    hallucination_detected: bool | None = None
+    unsupported_claims: list[str] | None = None
     runs: list[dict[str, Any]] | None = None
 
     def __post_init__(self) -> None:

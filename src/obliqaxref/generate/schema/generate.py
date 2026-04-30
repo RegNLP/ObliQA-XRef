@@ -46,7 +46,9 @@ class SchemaGenConfig:
     sample_n: int = 3  # brainstorm hint to model
 
     dedup: bool = False  # caller manages dedup_set
-    no_citations: bool = False  # forbid rule/section IDs in Q/A text (tags allowed)
+    no_citations: bool = True   # forbid rule/section IDs in Q/A text (tags allowed); default on
+    no_citations_in_question: bool = False  # QUESTION-only: forbid citation markers, rule/section numbers, passage IDs in the question
+    dual_anchors_mode: str = "always"  # always | freeform_only | off — require concrete element from each passage in QUESTION
 
 
 # =============================================================================
@@ -133,7 +135,9 @@ def build_schema_qa_prompt(
     answer_spans: list[AnswerSpan],
     max_per_persona: int,
     sample_n: int,
-    no_citations: bool = False,
+    no_citations: bool = True,
+    no_citations_in_question: bool = False,
+    dual_anchors_mode: str = "always",
 ) -> str:
     """
     Build Q&A generation prompt using extracted schema anchors.
@@ -178,12 +182,40 @@ def build_schema_qa_prompt(
             "No spans provided; provide a correct, minimal answer without forced slot copying."
         )
 
-    # No-citations clause
+    # No-citations clause (reinforcement on top of baked-in rule 4)
     no_cite_clause = ""
     if no_citations:
         no_cite_clause = (
-            "Do NOT include rule/section identifiers in the QUESTION or ANSWER text. "
-            "Note: the bracketed tags [#SRC:…]/[#TGT:…] are required and not considered citations."
+            "STRICT NO-CITATIONS POLICY (applies to QUESTION and ANSWER prose): "
+            "Do NOT include rule numbers, section numbers, article numbers, paragraph numbers, "
+            "passage identifiers, document abbreviations, or corpus codes anywhere in the QUESTION "
+            "or in the ANSWER prose. "
+            "The bracketed evidence tags [#SRC:{source_uid}] and [#TGT:{target_uid}] are mandatory "
+            "and are NOT considered citations."
+        )
+    elif no_citations_in_question:
+        no_cite_clause = (
+            "NO-CITATIONS-IN-QUESTION POLICY: "
+            "The QUESTION must not include explicit citation markers, rule numbers, section numbers, "
+            "article numbers, passage identifiers, document codes, or the provided reference string. "
+            "Ask about the compliance issue semantically rather than as a direct citation lookup. "
+            "This restriction applies only to the QUESTION; ANSWER evidence tags [#SRC:…]/[#TGT:…] are still required."
+        )
+
+    # Dual-anchors clause
+    dual_anchor_rule = ""
+    if dual_anchors_mode == "always":
+        dual_anchor_rule = (
+            "DUAL-ANCHOR REQUIREMENT: The QUESTION must depend on at least one concrete, "
+            "specific element from the SOURCE passage (an obligation, condition, term, or actor "
+            "unique to the source) AND at least one concrete, specific element from the TARGET "
+            "passage. A question answerable from either passage alone does NOT qualify. "
+            "If you cannot construct such a question naturally, output an empty array for that persona."
+        )
+    elif dual_anchors_mode == "freeform_only" and not has_structured:
+        dual_anchor_rule = (
+            "Dual anchors encouraged: try to hinge the QUESTION on one element from SOURCE "
+            "and one from TARGET, but only when this arises naturally from the material."
         )
 
     # Lexical hints from SOURCE
@@ -218,20 +250,25 @@ SCHEMA ANCHORS (inputs that shape your generation):
 - answer_spans (with types): {spans_json}
 - PASSAGE IDS (use in ANSWER exactly as shown): [#SRC:{source_uid}] and [#TGT:{target_uid}]
 
-RULES FOR Q&A GENERATION:
-1) Every QUESTION and ANSWER must require BOTH the SOURCE and the TARGET.
-2) Center the QUESTION on the semantic_hook's substance; paraphrase; do NOT quote.
+NON-NEGOTIABLE RULES:
+1) Dual-passage scope: Every QUESTION and ANSWER must require BOTH the SOURCE and TARGET passages to answer correctly.
+2) Semantic grounding: Center the QUESTION on the semantic_hook's substance. Paraphrase — do NOT quote.
 3) Actor fidelity: Use the exact actor names from the passages.
-4) Do NOT include verbatim quotations or rule/section numbers in the QUESTION.
-5) ANSWER STYLE (ALWAYS PROFESSIONAL regardless of persona):
+4) Citation-free question: The QUESTION must express the compliance need semantically.
+   - Do NOT mention rule numbers, section numbers, article numbers, paragraph numbers, or any passage identifier
+     (e.g., do not write "Rule 3.4", "Section 58(2)", "Article 12", "paragraph (b)", or the passage UIDs).
+   - Do NOT include document abbreviations, corpus codes, or the cross-reference string verbatim.
+   - Ask WHAT obligation/condition/procedure applies, not WHICH rule says it.
+5) {dual_anchor_rule if dual_anchor_rule else "Dual anchors: Each QUESTION should naturally hinge on one element from SOURCE and one from TARGET."}
+6) ANSWER STYLE (ALWAYS PROFESSIONAL regardless of persona):
    • Length: one compact professional paragraph of 180–230 words (hard minimum 160).
    • If you produce fewer than 160 words, expand with clarifying detail from the passages.
    • OPTIONAL bullets allowed only if needed; still keep 170–230 total words.
    • The answer MUST contain both tags exactly as written: [#SRC:{source_uid}] and [#TGT:{target_uid}]
    • Place the tags naturally (e.g., '… as required [#TGT:…] and permitted [#SRC:…]').
-6) {span_constraint}
-7) {type_hint if type_hint else "Tune question phrasing to match item types above."}
-8) {no_cite_clause if no_cite_clause else ""}
+7) {span_constraint}
+8) {type_hint if type_hint else "Tune question phrasing to match item types above."}
+9) {no_cite_clause if no_cite_clause else ""}
 
 PERSONA STYLES (QUESTION only):
 - professional: {PROFESSIONAL_STYLE}
@@ -335,6 +372,8 @@ def generate_qas_for_schema(
         max_per_persona=cfg.max_q_per_pair,
         sample_n=cfg.sample_n,
         no_citations=cfg.no_citations,
+        no_citations_in_question=cfg.no_citations_in_question,
+        dual_anchors_mode=cfg.dual_anchors_mode,
     )
 
     # Call LLM
@@ -425,6 +464,8 @@ def generate_qas_for_schema(
                         for span in schema_result.answer_spans
                     ],
                     "target_is_title": schema_result.target_is_title,
+                    "no_citations": cfg.no_citations,
+                    "dual_anchors_mode": cfg.dual_anchors_mode,
                 },
             )
 

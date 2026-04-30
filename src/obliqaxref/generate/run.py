@@ -18,6 +18,7 @@ Features:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import random
@@ -29,7 +30,7 @@ from obliqaxref.config import RunConfig
 from obliqaxref.generate.common.filters import PairFilterConfig, filter_pairs
 from obliqaxref.generate.common.io import read_csv_dicts, read_jsonl, write_jsonl
 from obliqaxref.generate.common.llm import build_client
-from obliqaxref.generate.common.validate import validate_qa_item
+from obliqaxref.generate.common.validate import detect_citation_leakage, validate_qa_item
 from obliqaxref.generate.dpel.report import DPELRunReport
 from obliqaxref.generate.schema.report import SchemaRunReport
 from obliqaxref.generate.types import (
@@ -64,8 +65,32 @@ class GenerateOverrides:
 
     dedup: bool = True
     drop_title_targets: bool = True
-    dual_anchors_mode: str = "freeform_only"
-    no_citations: bool = False
+    dual_anchors_mode: str = "always"  # always | freeform_only | off
+    no_citations: bool = True   # forbid rule/section IDs in Q/A prose (evidence tags still required); default on
+    no_citations_in_question: bool = True   # QUESTION-only citation guard; default on
+    citation_leakage_action: str = "keep"   # keep | filter | separate
+    sampling_mode: str | None = None        # None = use cfg.sampling.sampling_mode
+
+    def __post_init__(self) -> None:
+        valid_actions = {"keep", "filter", "separate"}
+        if self.citation_leakage_action not in valid_actions:
+            raise ValueError(
+                f"citation_leakage_action must be one of {sorted(valid_actions)!r}, "
+                f"got {self.citation_leakage_action!r}"
+            )
+        valid_modes = {"always", "freeform_only", "off"}
+        if self.dual_anchors_mode not in valid_modes:
+            raise ValueError(
+                f"dual_anchors_mode must be one of {sorted(valid_modes)!r}, "
+                f"got {self.dual_anchors_mode!r}"
+            )
+        if self.sampling_mode is not None:
+            from obliqaxref.generate.common.sampling import VALID_MODES
+            if self.sampling_mode not in VALID_MODES:
+                raise ValueError(
+                    f"sampling_mode must be one of {sorted(VALID_MODES)!r}, "
+                    f"got {self.sampling_mode!r}"
+                )
 
 
 def _apply_preset(o: GenerateOverrides) -> GenerateOverrides:
@@ -220,6 +245,7 @@ def _call_generate_qas_for_pair(*, pair: Pair, client, o: GenerateOverrides):
         seed=o.seed,
         max_q_per_pair=o.max_q_per_pair,
         no_citations=o.no_citations,
+        no_citations_in_question=o.no_citations_in_question,
     )
 
     result = generate_qas_for_pair(client=client, pair=pair, cfg=cfg)
@@ -269,10 +295,39 @@ def _load_existing_records(records_path: str) -> dict[str, Any]:
 
 
 # =========================================================================
+# LEAKAGE ANNOTATION HELPER
+# =========================================================================
+def _annotate_leakage(qa: QAItem, reference_text: str | None) -> QAItem:
+    """Run detect_citation_leakage on qa.question and return an annotated copy."""
+    result = detect_citation_leakage(qa.question, reference_text=reference_text)
+    return dataclasses.replace(
+        qa,
+        citation_leakage=result["has_leakage"],
+        citation_leakage_matches=result.get("matched_spans", []),
+        citation_leakage_types=result.get("leakage_type", []),
+    )
+
+
+# =========================================================================
 # Main entry
 # =========================================================================
 def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
     o = _apply_preset(o or GenerateOverrides())
+
+    # -------------------------------------------------------------------------
+    # PILOT MODE: override sampling parameters and redirect output directory
+    # -------------------------------------------------------------------------
+    pilot_cfg = cfg.pilot
+    pilot_active = pilot_cfg.pilot_mode
+    if pilot_active:
+        logger.warning(
+            "*** PILOT MODE ACTIVE: sampling %d xrefs, seed=%d, output suffix=%r ***",
+            pilot_cfg.pilot_n_xrefs_per_corpus,
+            pilot_cfg.pilot_random_seed,
+            pilot_cfg.pilot_output_suffix,
+        )
+        o.row_sample_n = pilot_cfg.pilot_n_xrefs_per_corpus
+        o.row_sample_seed = pilot_cfg.pilot_random_seed
 
     logger.info(
         "Generator starting. preset=%s method=%s dry_run=%s model=%s row_sample_n=%s max_pairs=%s max_q_per_pair=%s",
@@ -287,7 +342,13 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
 
     input_dir = Path(cfg.paths.input_dir)
     work_dir = Path(cfg.paths.work_dir)
-    out_dir = Path(cfg.paths.output_dir)
+    base_out_dir = Path(cfg.paths.output_dir)
+    # Redirect output to pilot-specific directory when pilot mode is on
+    out_dir = (
+        base_out_dir.parent / f"{base_out_dir.name}_{pilot_cfg.pilot_output_suffix}"
+        if pilot_active
+        else base_out_dir
+    )
     _ensure_dirs(work_dir, out_dir)
 
     # Create subdirectories for organized outputs
@@ -317,15 +378,35 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
     xref_rows = read_csv_dicts(str(xref_path))
     logger.info("Loaded crossref rows: %d", len(xref_rows))
 
-    # Sample rows early to control cost
-    rows = xref_rows
-    if o.row_sample_n and o.row_sample_n > 0 and len(rows) > o.row_sample_n:
-        rng = random.Random(o.row_sample_seed)
-        rows = rng.sample(rows, o.row_sample_n)
-        logger.info("Row-sampled crossref rows: %d", len(rows))
-        logger.info("Row-sampled crossref rows: %d", len(rows))
-    else:
-        logger.info("Row-sampled crossref rows: %d (no sampling applied)", len(rows))
+    # Sample rows using the configured difficulty-aware strategy
+    from obliqaxref.generate.common.sampling import sample_xref_rows as _sample_xref_rows
+    _sampling_mode = o.sampling_mode if o.sampling_mode is not None else cfg.sampling.sampling_mode
+    rows, sampling_report_data = _sample_xref_rows(
+        xref_rows,
+        n=o.row_sample_n,
+        mode=_sampling_mode,
+        seed=o.row_sample_seed,
+        max_jaccard_for_low_overlap=cfg.sampling.max_jaccard_for_low_overlap,
+        mixed_difficulty_bucket_weights=cfg.sampling.mixed_difficulty_bucket_weights,
+    )
+    logger.info(
+        "Row-sampled crossref rows: %d (mode=%s, n_requested=%d)",
+        len(rows),
+        _sampling_mode,
+        o.row_sample_n,
+    )
+
+    # Write sampling report and enriched xref rows to stats dir
+    sampling_report_path = stats_dir / "sampling_report.json"
+    sampling_report_path.write_text(
+        json.dumps(sampling_report_data, indent=2), encoding="utf-8"
+    )
+    logger.info("Wrote sampling report: %s", sampling_report_path)
+    sampled_xrefs_path = stats_dir / "sampled_xrefs_with_features.jsonl"
+    with open(sampled_xrefs_path, "w", encoding="utf-8") as _sf:
+        for _r in rows:
+            _sf.write(json.dumps(_r) + "\n")
+    logger.info("Wrote sampled xrefs with features: %s (%d rows)", sampled_xrefs_path, len(rows))
 
     # Build pairs (join with corpus)
     pairs = _build_pairs(rows, passage_index)
@@ -424,6 +505,7 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
         extract_seed=o.seed,
         gen_seed=o.seed,
         no_citations=o.no_citations,
+        dual_anchors_mode=o.dual_anchors_mode,
     )
 
     # Base report dict
@@ -437,6 +519,8 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
         "n_passages": len(passages),
         "n_xref_rows_loaded": len(xref_rows),
         "n_pairs_built": len(pairs),
+        "sampling_mode": _sampling_mode,
+        "sampling_report": sampling_report_data,
         "outputs": {},
     }
 
@@ -510,12 +594,66 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
                 else:
                     logger.warning("Dropped invalid QA (pair=%s): %s", pair.pair_uid, result.errors)
 
+        # Annotate leakage on all collected DPEL QAs
+        pair_ref_lookup: dict[str, str] = {p.pair_uid: p.reference_text for p in pairs}
+        dpel_annotated_final: list[QAItem] = []
+        dpel_citation_explicit: list[QAItem] = []
+        dpel_leakage_count = 0
+        for qa in qa_items:
+            annotated_qa = _annotate_leakage(qa, reference_text=pair_ref_lookup.get(qa.pair_uid))
+            if annotated_qa.citation_leakage:
+                dpel_leakage_count += 1
+            if annotated_qa.citation_leakage and o.citation_leakage_action in ("filter", "separate"):
+                if o.citation_leakage_action == "separate":
+                    dpel_citation_explicit.append(annotated_qa)
+            else:
+                dpel_annotated_final.append(annotated_qa)
+
+        dpel_dropped_leakage = sum(
+            1 for qa in dpel_annotated_final
+            if False  # already excluded above; count = qa_items - annotated_final - explicit
+        )
+        # Recalculate counts cleanly
+        dpel_dropped_leakage = (
+            dpel_leakage_count - len(dpel_citation_explicit)
+            if o.citation_leakage_action == "filter"
+            else 0
+        )
+        dpel_separated_leakage = len(dpel_citation_explicit)
+
+        dpel_report.merge_leakage_result(
+            generated_total=len(qa_items),
+            citation_leakage_count=dpel_leakage_count,
+            dropped_citation_leakage=dpel_dropped_leakage,
+            separated_citation_leakage=dpel_separated_leakage,
+        )
+
+        logger.info(
+            "DPEL leakage annotation: total=%d, leakage=%d, action=%s, dropped=%d, separated=%d",
+            len(qa_items),
+            dpel_leakage_count,
+            o.citation_leakage_action,
+            dpel_dropped_leakage,
+            dpel_separated_leakage,
+        )
+
         # Write DPEL Q&As (append mode if resuming)
-        write_jsonl(str(dpel_qa_path), [to_json(x) for x in qa_items])
+        write_jsonl(str(dpel_qa_path), [to_json(x) for x in dpel_annotated_final])
         report["outputs"]["dpel/dpel.qa.jsonl"] = str(dpel_qa_path)
-        report["n_dpel_qas"] = len(qa_items)
+        report["n_dpel_qas"] = len(dpel_annotated_final)
         report["dpel_stats"] = dpel_report.as_dict()
-        logger.info("Wrote DPEL QA: %s (n=%d total)", dpel_qa_path, len(qa_items))
+        logger.info("Wrote DPEL QA: %s (n=%d total)", dpel_qa_path, len(dpel_annotated_final))
+
+        if dpel_citation_explicit:
+            dpel_explicit_path = dpel_dir / "citation_explicit.qa.jsonl"
+            write_jsonl(str(dpel_explicit_path), [to_json(x) for x in dpel_citation_explicit])
+            report["outputs"]["dpel/citation_explicit.qa.jsonl"] = str(dpel_explicit_path)
+            report["n_dpel_citation_explicit"] = len(dpel_citation_explicit)
+            logger.info(
+                "Wrote DPEL citation-explicit QAs: %s (n=%d)",
+                dpel_explicit_path,
+                len(dpel_citation_explicit),
+            )
 
     # =========================================================================
     # SCHEMA METHOD
@@ -602,6 +740,8 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
                 seed=o.seed,
                 max_q_per_pair=o.max_q_per_pair,
                 no_citations=o.no_citations,
+                no_citations_in_question=o.no_citations_in_question,
+                dual_anchors_mode=o.dual_anchors_mode,
             )
             qas, gen_meta = generate_qas_for_schema(
                 client=client,
@@ -656,23 +796,86 @@ def run(cfg: RunConfig, o: GenerateOverrides | None = None) -> None:
             report["n_schema_records"],
         )
 
+        # Annotate leakage on all collected SCHEMA QAs
+        schema_annotated_final: list[QAItem] = []
+        schema_citation_explicit: list[QAItem] = []
+        schema_leakage_count = 0
+        for qa in schema_qa_items:
+            annotated_qa = _annotate_leakage(qa, reference_text=pair_ref_lookup.get(qa.pair_uid))
+            if annotated_qa.citation_leakage:
+                schema_leakage_count += 1
+            if annotated_qa.citation_leakage and o.citation_leakage_action in ("filter", "separate"):
+                if o.citation_leakage_action == "separate":
+                    schema_citation_explicit.append(annotated_qa)
+            else:
+                schema_annotated_final.append(annotated_qa)
+
+        schema_dropped_leakage = (
+            schema_leakage_count - len(schema_citation_explicit)
+            if o.citation_leakage_action == "filter"
+            else 0
+        )
+        schema_separated_leakage = len(schema_citation_explicit)
+
+        schema_report.merge_leakage_result(
+            generated_total=len(schema_qa_items),
+            citation_leakage_count=schema_leakage_count,
+            dropped_citation_leakage=schema_dropped_leakage,
+            separated_citation_leakage=schema_separated_leakage,
+        )
+
+        logger.info(
+            "SCHEMA leakage annotation: total=%d, leakage=%d, action=%s, dropped=%d, separated=%d",
+            len(schema_qa_items),
+            schema_leakage_count,
+            o.citation_leakage_action,
+            schema_dropped_leakage,
+            schema_separated_leakage,
+        )
+
         # Write SCHEMA Q&As
-        write_jsonl(str(schema_qa_path), [to_json(x) for x in schema_qa_items])
+        write_jsonl(str(schema_qa_path), [to_json(x) for x in schema_annotated_final])
         report["outputs"]["schema/schema.qa.jsonl"] = str(schema_qa_path)
-        report["n_schema_qas"] = len(schema_qa_items)
+        report["n_schema_qas"] = len(schema_annotated_final)
         report["schema_stats"] = schema_report.as_dict()
-        logger.info("Wrote SCHEMA QAs: %s (n=%d total)", schema_qa_path, len(schema_qa_items))
+        logger.info("Wrote SCHEMA QAs: %s (n=%d total)", schema_qa_path, len(schema_annotated_final))
+
+        if schema_citation_explicit:
+            schema_explicit_path = schema_dir / "citation_explicit.qa.jsonl"
+            write_jsonl(str(schema_explicit_path), [to_json(x) for x in schema_citation_explicit])
+            report["outputs"]["schema/citation_explicit.qa.jsonl"] = str(schema_explicit_path)
+            report["n_schema_citation_explicit"] = len(schema_citation_explicit)
+            logger.info(
+                "Wrote SCHEMA citation-explicit QAs: %s (n=%d)",
+                schema_explicit_path,
+                len(schema_citation_explicit),
+            )
 
         # If method=="both", merge schema QAs into qa_items
         if o.method == "both":
-            qa_items.extend(schema_qa_items)
+            qa_items.extend(schema_annotated_final)
 
     # =========================================================================
     # Final report
     # =========================================================================
+    # Final report
+    # =========================================================================
+    report["pilot_mode"] = pilot_active
+    if pilot_active:
+        report["pilot_n_xrefs_per_corpus"] = pilot_cfg.pilot_n_xrefs_per_corpus
+        report["pilot_random_seed"] = pilot_cfg.pilot_random_seed
+        report["pilot_output_suffix"] = pilot_cfg.pilot_output_suffix
+
     report_path = stats_dir / "generate_report.json"
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     logger.info("Wrote: %s", report_path)
+
+    # Emit pilot report when pilot mode is active
+    if pilot_active and not o.dry_run:
+        from obliqaxref.pilot.report import generate_pilot_report
+
+        generate_pilot_report(out_dir=out_dir, generate_report=report)
+        logger.info("Pilot report written to: %s", out_dir)
 
 
 # =========================================================================
