@@ -51,6 +51,13 @@ curation:
     ir_method: majority_voting
     rrf_k: 60
     agreement_threshold: 0.8
+    xref_expansion:
+      seed_k: 20
+      final_k: 20
+      expansion_direction: both
+      expansion_weight: 0.8
+      neighbour_score_mode: max
+      max_expanded_per_seed: null
   judge:
     enabled: true
     llm_backend: azure

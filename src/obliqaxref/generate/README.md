@@ -1,16 +1,38 @@
-# obliqaxref.generate
+# `obliqaxref.generate`
 
-Generator module for ObliQA-XRef: builds QA benchmark items from adapter outputs.
+Generator module for ObliQA-XRef citation-dependent QA candidates.
 
-Inputs (canonical):
-- runs/<adapter_run>/processed/passage_corpus.jsonl
-- runs/<adapter_run>/processed/crossref_resolved.cleaned.csv
+Inputs:
+
+- `runs/adapter_<corpus>/processed/passage_corpus.jsonl`
+- `runs/adapter_<corpus>/processed/crossref_resolved.cleaned.csv`
 
 Methods:
-- DPEL: direct QA generation from pairs
-- SCHEMA: schema extraction -> QA generation
 
-Outputs:
-- runs/<generate_run>/dpel/qas.jsonl + report.json
-- runs/<generate_run>/schema/items.jsonl + reports + qas.jsonl
-- runs/<generate_run>/stats/*
+- **DPEL**: direct passage-driven QA generation from source→target pairs.
+- **SCHEMA**: schema extraction followed by schema-guided QA generation.
+
+Current safeguards:
+
+- citation leakage detector
+- `no_citations_in_question`
+- DPEL no-citation prompt rules
+- SCHEMA dual-anchor defaults
+- difficulty-aware cross-reference sampling
+- pilot-run mode
+
+Typical commands:
+
+```bash
+python -m obliqaxref generate --config configs/project.yaml
+python -m obliqaxref generate --config configs/project.yaml --preset smoke
+python -m obliqaxref generate --config configs/project.yaml --max-pairs 50
+```
+
+Primary outputs under `runs/generate_<corpus>/out/`:
+
+- `generator/items.jsonl`
+- `dpel/dpel.qa.jsonl`
+- `schema/schema.extraction.jsonl`
+- `schema/schema.qa.jsonl`
+- `stats/generate_report.json`

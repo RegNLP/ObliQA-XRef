@@ -1,9 +1,9 @@
 """
-IR retrieval orchestration: Run BM25, E5, RRF, Cross-Encoder on generated items.
+IR retrieval orchestration: Run BM25, E5, RRF, XRef expansion, Cross-Encoder on generated items.
 
 This module:
 1. Loads generated items and full passage corpus
-2. Runs BM25, E5, RRF, Cross-Encoder retrievers
+2. Runs BM25, E5, RRF, XRef expansion, Cross-Encoder retrievers
 3. Writes TREC format runs for voting in curation
 4. Computes voting scores with thresholds
 """
@@ -17,7 +17,14 @@ from pathlib import Path
 from typing import Any
 
 from obliqaxref.config import RunConfig
-from obliqaxref.curate.ir import BM25Retriever, CrossEncoderReranker, DenseRetriever, RRFFusion
+from obliqaxref.curate.ir import (
+    BM25Retriever,
+    CrossEncoderReranker,
+    DenseRetriever,
+    RRFFusion,
+    expand_retrieval_run,
+    load_xref_graph,
+)
 from obliqaxref.utils.io import ensure_dir
 
 logger = logging.getLogger(__name__)
@@ -175,6 +182,49 @@ def run_ir_retrieval(cfg: RunConfig) -> dict[str, Any]:
     rrf = RRFFusion(k=60)
     rrf_run = rrf.fuse([bm25_run, e5_run], run_name="rrf_bm25_e5")
 
+    # Graph-aware citation expansion baselines.
+    xref_expanded_runs = []
+    xref_expansion_debug: list[dict[str, Any]] = []
+    xref_file = Path(cfg.paths.input_dir) / "crossref_resolved.cleaned.csv"
+    xref_cfg = cfg.curation.ir_agreement.xref_expansion
+    if xref_file.exists():
+        logger.info("  Loading cross-reference graph: %s", xref_file)
+        xref_graph = load_xref_graph(xref_file, set(passage_index.keys()))
+        logger.info(
+            "  Running XRef expansion baselines "
+            "(seed_k=%d, final_k=%d, direction=%s, weight=%.3f, mode=%s)...",
+            xref_cfg.seed_k,
+            xref_cfg.final_k,
+            xref_cfg.expansion_direction,
+            xref_cfg.expansion_weight,
+            xref_cfg.neighbour_score_mode,
+        )
+        gold_pairs = {
+            item["item_id"]: (item.get("source_passage_id"), item.get("target_passage_id"))
+            for item in items
+        }
+        for base_run, expanded_name in (
+            (bm25_run, "bm25_xref_expand"),
+            (e5_run, "e5_xref_expand"),
+            (rrf_run, "rrf_xref_expand"),
+        ):
+            expanded_run, debug_rows = expand_retrieval_run(
+                base_run,
+                xref_graph,
+                run_name=expanded_name,
+                seed_k=xref_cfg.seed_k,
+                final_k=xref_cfg.final_k,
+                expansion_direction=xref_cfg.expansion_direction,
+                expansion_weight=xref_cfg.expansion_weight,
+                neighbour_score_mode=xref_cfg.neighbour_score_mode,
+                max_expanded_per_seed=xref_cfg.max_expanded_per_seed,
+                gold_pairs=gold_pairs,
+            )
+            xref_expanded_runs.append(expanded_run)
+            xref_expansion_debug.extend(debug_rows)
+    else:
+        logger.warning("  Cross-reference graph not found; skipping XRef expansion: %s", xref_file)
+
     # Cross-encoder reranking
     logger.info("  Running Cross-Encoder reranking...")
     ce = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
@@ -199,7 +249,7 @@ def run_ir_retrieval(cfg: RunConfig) -> dict[str, Any]:
     # Write TREC format runs
     logger.info("\n[Step 5] Writing TREC runs...")
 
-    runs = [bm25_run, e5_run, rrf_run, ce_run]
+    runs = [bm25_run, e5_run, rrf_run, *xref_expanded_runs, ce_run]
     trec_files = {}
 
     for run in runs:
@@ -215,7 +265,14 @@ def run_ir_retrieval(cfg: RunConfig) -> dict[str, Any]:
         trec_files[run.run_name] = str(trec_file)
         logger.info(f"  ✓ {trec_file.name}")
 
-        # Write qrels for IR evaluation
+    if xref_expansion_debug:
+        xref_debug_file = out_dir / "xref_expand_debug.jsonl"
+        with open(xref_debug_file, "w", encoding="utf-8") as f:
+            for row in xref_expansion_debug:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        logger.info("  ✓ %s", xref_debug_file.name)
+
+    # Write qrels for IR evaluation
     logger.info("\n[Step 5b] Writing qrels...")
     qrels_file = out_dir / "qrels.txt"
     with open(qrels_file, "w") as f:

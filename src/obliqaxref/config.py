@@ -89,6 +89,48 @@ class GenerationConfig(BaseModel):
 
 
 class IRAgreementConfig(BaseModel):
+    class XRefExpansionConfig(BaseModel):
+        seed_k: int = Field(20, description="Number of seed results to expand per query")
+        final_k: int = Field(20, description="Number of expanded results to keep per query")
+        expansion_direction: str = Field(
+            "both",
+            description="Cross-reference expansion direction: outgoing | incoming | both",
+        )
+        expansion_weight: float = Field(
+            0.8,
+            description="Multiplier applied to parent scores for expanded neighbours",
+        )
+        neighbour_score_mode: str = Field(
+            "max",
+            description="How to aggregate neighbour scores reached from multiple parents: max | sum",
+        )
+        max_expanded_per_seed: int | None = Field(
+            None,
+            description="Optional cap on expanded neighbours added for each seed passage",
+        )
+
+        def model_post_init(self, __context: Any) -> None:
+            valid_directions = {"outgoing", "incoming", "both"}
+            if self.expansion_direction not in valid_directions:
+                raise ValueError(
+                    "expansion_direction must be one of "
+                    f"{sorted(valid_directions)!r}, got {self.expansion_direction!r}"
+                )
+            valid_modes = {"max", "sum"}
+            if self.neighbour_score_mode not in valid_modes:
+                raise ValueError(
+                    "neighbour_score_mode must be one of "
+                    f"{sorted(valid_modes)!r}, got {self.neighbour_score_mode!r}"
+                )
+            if self.seed_k <= 0:
+                raise ValueError("seed_k must be positive")
+            if self.final_k <= 0:
+                raise ValueError("final_k must be positive")
+            if self.expansion_weight < 0:
+                raise ValueError("expansion_weight must be non-negative")
+            if self.max_expanded_per_seed is not None and self.max_expanded_per_seed < 0:
+                raise ValueError("max_expanded_per_seed must be non-negative or null")
+
     top_k: int = 20
     keep_threshold: int = 4  # NEW
     judge_threshold: int = 3  # NEW
@@ -103,6 +145,7 @@ class IRAgreementConfig(BaseModel):
         None, description="Per-run weights for weighted_voting"
     )
     rrf_k: int = Field(60, description="k parameter for RRF voting")
+    xref_expansion: XRefExpansionConfig = Field(default_factory=XRefExpansionConfig)
 
 
 class JudgeConfig(BaseModel):

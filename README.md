@@ -1,409 +1,215 @@
-# ObliQA-XRef: Citation-Dependent QA Benchmark Construction
+# ObliQA-XRef
 
-ObliQA-XRef is a production-grade framework for constructing **strictly citation-dependent** benchmarks for evaluating retrieval and RAG systems in citation-heavy regulatory and legislative corpora.
+ObliQA-XRef is a regulatory NLP benchmark-construction pipeline for **citation-dependent regulatory QA**. It is part of the ObliQA benchmark family:
 
-## Core Innovation
+- **ObliQA**: obligation-grounded regulatory QA
+- **ObliQA-MP**: general multi-passage regulatory QA
+- **ObliQA-XRef**: cross-reference-aware QA where the answer requires following an explicit source→target citation
 
-**Strict Citation Dependency**: Only QA items where answering REQUIRES multiple passages are included. The source passage alone must be insufficient; the target (cited) passage must provide essential missing detail.
+The benchmark focuses on items where the source passage is relevant but insufficient, the cited target passage adds essential information, and the final answer is supported by both.
 
-This tests genuine cross-document reasoning, not trivial single-passage answerability.
+## Pipeline
 
----
+1. **Adapter**: normalize corpus passages and resolve source→target cross-references.
+2. **Generate**: create DPEL and SCHEMA QA candidates from cross-reference pairs.
+3. **Curate**: run diagnostic retrieval, strict judge v2 citation-dependency filtering, and answer validation.
+4. **Finalize/Evaluate**: export answer-valid benchmark splits, run retrieval/answer diagnostics, and produce analysis tables.
 
-## Quick Start (5 minutes)
+Current curation policy:
 
-```bash
-# 1. Clone and setup
-git clone https://github.com/RegNLP/ObliQA-XRef.git && cd ObliQA-XRef
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+- IR agreement is **diagnostic only**.
+- `dependency-valid` = judge PASS.
+- `answer-valid` = judge PASS ∩ answer PASS.
+- Experimental final exports default to `answer-valid`.
+- Dependency-valid but answer-failed items are retained separately for diagnosis.
 
-# 2. Edit config for your dataset (corpus: ukfin or adgm)
-vim configs/project.yaml
+## Key Outputs
 
-# 3. Run complete pipeline
-python -m obliqaxref adapter --config configs/project.yaml
-python -m obliqaxref generate --config configs/project.yaml
-python -m obliqaxref curate --config configs/project.yaml
+Curation writes explicit final cohorts under `runs/curate_<corpus>/out/`:
 
-# 4. View results
-python scripts/generate_stats.py
-python scripts/curate_stats.py
-```
+- `final_dependency_valid.jsonl` / `.csv`
+- `final_answer_valid.jsonl` / `.csv`
+- `final_answer_failed.jsonl` / `.csv`
+- `final_benchmark.jsonl` / `.csv` compatibility alias, based on `curation.final_export_basis`
+- `final_hard.jsonl` / `.csv` challenging subset of the compatibility alias
+- `final_benchmark_stats.json`
 
-**First time?** Try the smoke test: `python -m obliqaxref generate --config configs/project.yaml --preset smoke`
+Finalized downstream datasets are written under `ObliQA-XRef_Out_Datasets/`.
 
----
+All final exports include ObliQA-family metadata fields such as `benchmark_family`, `benchmark_name`, `benchmark_role`, `evidence_structure`, and relation fields for ObliQA / ObliQA-MP positioning.
 
-## What is ObliQA-XRef?
-
-A four-stage pipeline that transforms regulatory documents into high-quality, citation-dependent QA benchmarks:
-
-| Stage | Input | Output | Method |
-|-------|-------|--------|--------|
-| **Adapter** | Raw docs (PDF/HTML) | Passages + cross-refs | Extraction + normalization |
-| **Generate** | Passages + citations | ~100-200 QA items | Schema + DPEL generation |
-| **Curate** | Generated items | Final benchmark (all tiers) | Citation-dependency judge + answer validation |
-| **Evaluate** | Final benchmark | Quality metrics | Retriever evaluation |
-
-**Supported datasets**:
-- **UKFIN** (UK Financial Authority / PRA Rulebook) — corpus key: `ukfin`
-- **ADGM** (Abu Dhabi Global Market / FSRA) — corpus key: `adgm`
-
----
-
-## Installation
-
-### Requirements
-- Python 3.10+
-- Virtual environment (recommended)
-- (Optional) Azure OpenAI API key for judge LLM
-
-### Setup
+## Quick Start
 
 ```bash
-git clone https://github.com/RegNLP/ObliQA-XRef.git
-cd ObliQA-XRef
 python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+source .venv/bin/activate
 pip install -e ".[dev]"
-python -m obliqaxref --help   # Verify
+python -m obliqaxref --help
 ```
 
----
-
-## Configuration
-
-All settings in `configs/project.yaml`:
-
-```yaml
-corpus: ukfin  # or 'adgm'
-
-adapter:
-  stages: [download, corpus, crossref, clean]
-
-generate:
-  method: both  # 'schema', 'dpel', or 'both'
-  temperature: 0.2
-  max_pairs: null  # null = all
-  # Citation-free prose policy (defaults — no inline rule/section IDs in Q/A)
-  no_citations: true
-  no_citations_in_question: true
-  citation_leakage_action: keep   # keep | filter | separate
-  dual_anchors_mode: always       # always | freeform_only | off
-
-curation:
-  ir_agreement:
-    top_k: 100
-  judge:
-    temperature: 0.0
-    num_judge_passes: 1
-```
-
-See [configs/project.yaml](configs/project.yaml) for complete reference with all options.
-
----
-
-## Running the Pipeline
-
-### Standard Pipeline
+Run the main stages:
 
 ```bash
 python -m obliqaxref adapter --config configs/project.yaml
 python -m obliqaxref generate --config configs/project.yaml
 python -m obliqaxref curate --config configs/project.yaml
-python scripts/generate_stats.py && python scripts/curate_stats.py
+python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
 ```
 
-### Evaluation Module (IR, Answer Gen, Answer Eval)
+Corpus-specific dev configs are available in `configs/adgm_dev.yaml` and `configs/ukfin_dev.yaml`.
 
-The evaluation module provides intrinsic stats and downstream evaluation (IR, answer generation, and answer quality evaluation).
+## Generation
 
-Quick end-to-end (dev scale):
-```
-# finalize → stats → humaneval → (IR+Answer)
-python -m obliqaxref.eval.cli pipeline
+ObliQA-XRef supports two generation methods:
 
-# evaluate generated answers (all corpora + methods)
-python -m obliqaxref.eval.cli answer-eval
-```
+- **DPEL**: direct passage-driven QA generation from source→target pairs.
+- **SCHEMA**: schema-guided generation using extracted hooks, item types, and target spans.
 
-Run individual evaluation steps:
-```
-# IR evaluation on test split (writes ObliQA-XRef_Out_Datasets/ir_eval_{corpus}_test.json)
-python -m obliqaxref.eval.cli ir --corpus both --k 10
+Current generation safeguards:
 
-# Answer generation for test split
-# - Uses ONLY retrieved passages (no SOURCE/TARGET roles)
-# - Answers are concise (≈90–140 words) and cite used passages with [#ID:PASSAGE_ID]
-# - Writes: ObliQA-XRef_Out_Datasets/answer_gen_{corpus}_{subset}_{method}_test.json
-python -m obliqaxref.eval.cli answer --corpus both --methods bm25 e5 rrf ce_rerank_union200
+- Citation leakage detector for rule/section identifiers in generated prose.
+- `no_citations_in_question` config to prevent retrieval shortcuts in questions.
+- DPEL prompt rules that avoid citation leakage.
+- SCHEMA defaults with no citations in questions and stronger dual-anchor behavior.
+- Difficulty-aware cross-reference sampling.
+- Pilot-run mode for small, isolated end-to-end runs.
 
-# Answer evaluation
-# - Structural: ID-tag presence/alignment with retrieved docids, length, ROUGE-L (LCS), passage overlap, citation-like violations
-# - GPT: answer_relevance and answer_faithfulness (0–1) via Azure deployment
-# - NLI: external CrossEncoder by default; GPT NLI fallback
-# - Writes per subset×method: ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_{subset}_{method}_test.json
-# - Also writes compact CSV per corpus: ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_compact.csv
-python -m obliqaxref.eval.cli answer-eval
-```
+Examples:
 
-Outputs live under `ObliQA-XRef_Out_Datasets/` (finalized datasets, IR runs, generated answers, evaluated answers) and `runs/stats/eval/` (resource stats).
-
-Combined generator+evaluator (direct runner):
-```
-python src/obliqaxref/eval/DownstreamEval/answer_gen_eval.py \
-  --corpus both --subset both --k 10 --root ObliQA-XRef_Out_Datasets \
-  --method all --model gpt-5.2-MBZUAI --eval
-```
-
-### Quick Test
 ```bash
+# Standard generation
+python -m obliqaxref generate --config configs/project.yaml
+
+# Fast smoke run
 python -m obliqaxref generate --config configs/project.yaml --preset smoke
-```
 
-### Development Mode
-```bash
-# Limited generation
+# Sampling-limited generation
 python -m obliqaxref generate --config configs/project.yaml --max-pairs 50
 
-# Skip answer validation
+# Difficulty-aware sampling is configured in YAML, for example:
+# sampling.sampling_mode: mixed_difficulty
+python -m obliqaxref generate --config configs/project.yaml
+
+# Pilot mode is configured in YAML:
+# pilot.pilot_mode: true
+# pilot.pilot_n_xrefs_per_corpus: 50
+python -m obliqaxref generate --config configs/adgm_dev.yaml
+```
+
+See [docs/generator/README.md](docs/generator/README.md).
+
+## Curation
+
+The current curation stage:
+
+- Runs BM25, E5, RRF, CE reranking, and XRefExpand baselines where configured.
+- Assigns `ir_difficulty_label` as metadata only.
+- Sends all eligible generated items to the judge.
+- Uses judge schema v2 fields for source relevance, target relevance, source insufficiency, target necessity, answer support, and citation dependency.
+- Uses answer validation to control membership in `final_answer_valid`.
+
+Examples:
+
+```bash
+# Full curation
+python -m obliqaxref curate --config configs/project.yaml
+
+# Curation IR subcommand used during retrieval/debug work
+python -m obliqaxref.curate.cli ir -c configs/adgm_dev.yaml
+
+# Skip expensive stages for debugging
 python -m obliqaxref curate --config configs/project.yaml --skip-answer
 ```
 
----
+See [docs/curation/README.md](docs/curation/README.md).
 
-## Pipeline Stages
+## Retrieval And Evaluation
 
-### 1. Adapter — Extract & Normalize
+Supported retrieval/evaluation methods include:
 
-Extracts passages from documents and resolves cross-references.
+- BM25
+- E5 dense retrieval
+- RRF fusion
+- Cross-encoder reranking over union candidates
+- BM25+XRefExpand, E5+XRefExpand, and RRF+XRefExpand
 
-**Key outputs**:
-- `passage_corpus.jsonl` — Passages with unique IDs
-- `crossref_resolved.csv` — Source → Target mappings
+The CE reranker uses the actual question text for scoring, not `query_id`.
 
-**See**: [Adapter Documentation](docs/adapter/README.md)
+Pair-level retrieval metrics:
 
-### 2. Generate — Create QA Items
+- `Both@5/10/20`
+- `SRC-only@5/10/20`
+- `TGT-only@5/10/20`
+- `Neither@5/10/20`
+- `PairMRR`
 
-Generates diverse items via two methods:
+Standard metrics such as Recall@k, MAP@k, and nDCG@k are preserved.
 
-**SCHEMA** — Pair-based extraction + controlled generation
-- Extracts structured fields (semantic hooks, citation hooks, item types, answer spans) from source→target pairs
-- Then generates Q&As using those anchors for controlled, citation-dependent items
-- Item types: Obligation, Permission, Definition, Scope, Procedure, Prohibition
-- Default: `no_citations=True`, `dual_anchors_mode="always"` — prose must not contain inline rule/section IDs; the model is required to draw factual claims from both passages
+Examples:
 
-**DPEL** — Direct pair-based generation
-- Generates Q&As directly from source→target passage pairs
-- Emphasizes natural citation dependency through joint evidence requirements
-- LLM-based generation with strict dual-evidence constraints and a STRICT NO-CITATIONS POLICY prompt rule
+```bash
+# Finalize answer-valid cohort for experiments
+python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
 
-**Citation leakage detection** runs post-generation on all items:
-- Flags items where rule/section identifiers appear in Q or A prose
-- Configurable via `citation_leakage_action`: `keep` (default, flag only), `filter` (drop), or `separate`
+# IR evaluation
+python -m obliqaxref.eval.cli ir --corpus both --k 10
 
-**Key output**: `curated_items.generate.jsonl` (merged + deduplicated)
+# Answer generation and evaluation
+python -m obliqaxref.eval.cli answer --corpus both --methods bm25 e5 rrf ce_rerank_union200
+python -m obliqaxref.eval.cli answer-eval --corpus both
+```
 
-**See**: [Generator Documentation](docs/generator/README.md)
+See [docs/eval/README.md](docs/eval/README.md).
 
-### 3. Curate — Filter & Validate
+## Analysis Utilities
 
-Multi-stage validation with increasing strictness:
+```bash
+# Answer quality grouped by retrieval outcome
+python -m obliqaxref.eval.cli answer-quality-by-retrieval \
+  --root ObliQA-XRef_Out_Datasets
 
-**IR Retrieval** (4 methods in parallel):
-- BM25 (lexical)
-- E5 (semantic)
-- RRF (fusion)
-- Cross-Encoder (reranking)
+# Human audit sample export
+python -m obliqaxref.eval.cli human-audit-export \
+  --input runs/curate_adgm/out/final_answer_valid.jsonl runs/curate_ukfin/out/final_answer_valid.jsonl \
+  --out ObliQA-XRef_Out_Datasets \
+  --n 200 --seed 13
 
-**IR Annotation** (diagnostic only — does not filter):
-- Counts how many retrievers co-retrieved source + target for each item
-- Assigns `ir_difficulty_label` ∈ {`easy`, `medium`, `hard`, `source_only`, `target_only`, `neither`}
-- All items proceed to the citation-dependency judge regardless of IR outcome
+# Human audit aggregation
+python -m obliqaxref.eval.cli human-audit-aggregate \
+  --inputs annotations_1.csv annotations_2.csv \
+  --out ObliQA-XRef_Out_Datasets
 
-**Citation-dependency judge (all items)**:
-- Validates every item for strict citation dependency
-- Checks: source alone insufficient? target adds material value?
-- Confidence-scored verdicts; ties → DROP
-
-**Answer validation** (optional):
-- Secondary filter on citation-dependency PASS items
-- Skippable with `--skip-answer`
-
-**Final benchmark assembly**:
-- Intersects judge PASS ∩ answer PASS
-- Exports `final_benchmark.jsonl/csv` (all validated items) and `final_hard.jsonl/csv` (challenging tier only)
-- Each item carries `ir_difficulty_label` and `difficulty_tier` (`retrievable` | `challenging`)
-
-**See**: [Curation Documentation](docs/curation/README.md)
-
----
-
-## Understanding Citation Dependency
-
-### The Core Idea
-
-**Citation-Dependent**: Answer requires information from BOTH passages. Source alone is insufficient.
-
-**Examples**:
-- ❌ NOT citation-dependent: "What's section 3.2?" → Answerable from 3.2 alone
-- ✅ Citation-dependent: "How do section 3.2's conditions align with Basel III?" → Needs both 3.2 (conditions) + Basel III (specific standards)
-
-### DPEL Method
-
-**Domain-Passage-Entity-Link** generation:
-- **Domain** — Regulatory context
-- **Passage (Source)** — Framework/conditions
-- **Passage (Target)** — Supporting definitions/requirements
-- **Link** — Citation connecting them
-
-Result: Questions naturally requiring cross-document reasoning.
-
----
-
-## Results
-
-### ADGM
-- **Generated**: 100+ items
-- **Final**: ~105 items
-- **Judge pass rate**: 97.5%
-
-### UKFIN
-- **Generated**: 100+ items
-- **Final**: ~85 items
-- **Judge pass rate**: 93.2%
-
----
-
-## Dataset Naming Note
-
-**In research papers**, the released datasets are referred to as:
-- **ObliQA-XRef-FSRA** (Financial Services Regulatory Authority corpus from ADGM)
-- **ObliQA-XRef-UKFin** (UK PRA Rulebook corpus)
-
-**In the codebase and configs**, use the corpus keys:
-- `adgm` for FSRA/ADGM
-- `ukfin` for UK PRA
-
----
+# Benchmark statistics and paper-ready tables
+python -m obliqaxref.eval.cli benchmark-statistics \
+  --input runs/curate_adgm/out/final_answer_valid.jsonl runs/curate_ukfin/out/final_answer_valid.jsonl \
+  --out ObliQA-XRef_Out_Datasets
+```
 
 ## Project Structure
 
+```text
+configs/                 YAML configs
+data/                    local corpus inputs
+docs/                    stage documentation
+scripts/                 utility scripts
+src/obliqaxref/adapter/  corpus adapters
+src/obliqaxref/generate/ DPEL and SCHEMA generation
+src/obliqaxref/curate/   IR diagnostics, judge, answer validation, final cohorts
+src/obliqaxref/eval/     finalize, retrieval eval, answer eval, analysis utilities
+tests/                   regression tests
+runs/                    local pipeline outputs
 ```
-ObliQA-XRef/
-├── README.md                          # This file
-├── LICENSE                            # MIT License
-├── pyproject.toml                     # Package config
-├── configs/
-│   └── project.yaml                   # Unified configuration
-├── docs/
-│   ├── adapter/README.md              # Adapter guide
-│   ├── generator/README.md            # Generator guide
-│   └── curation/README.md             # Curation guide
-├── src/obliqaxref/
-│   ├── adapter/                       # Extraction + normalization
-│   ├── generate/                      # Schema + DPEL generation
-│   ├── curate/                        # IR, voting, judge
-│   └── utils/                         # Utilities
-├── scripts/
-│   ├── generate_stats.py              # Generation metrics
-│   ├── curate_stats.py                # Curation metrics
-│   └── adapter_stats_*.py             # Dataset-specific stats
-├── data/
-│   ├── adgm/                          # ADGM corpus
-│   └── ukfin/                         # UKFIN corpus
-├── runs/                              # Pipeline outputs
-│   ├── adapter_*/                     # Adapter outputs
-│   ├── generate_*/                    # Generator outputs
-│   ├── curate_*/                      # Curation outputs
-│   └── stats/                         # Statistics reports
-└── tests/
-    ├── test_citation_leakage.py           # detect_citation_leakage() — 62 tests
-    ├── test_citation_free_generation.py   # no_citations + dual_anchors_mode — 112 tests
-    ├── test_ir_difficulty_label.py        # IR difficulty label + vote computation — 28 tests
-    └── test_assemble_final_benchmark.py   # Final benchmark assembly — 23 tests
-```
-
----
-
-## Common Commands
-
-### View Generation Statistics
-```bash
-python scripts/generate_stats.py
-python scripts/generate_stats.py --corpus adgm
-```
-
-### View Curation Statistics
-```bash
-python scripts/curate_stats.py
-```
-
-### Run Individual Stages
-```bash
-# Adapter only
-python -m obliqaxref adapter --config configs/project.yaml --log-level INFO
-
-# Generate with smoke test (fast)
-python -m obliqaxref generate --config configs/project.yaml --preset smoke
-
-# Generate with development settings (50 pairs)
-python -m obliqaxref generate --config configs/project.yaml --max-pairs 50
-
-# Curate with all substeps
-python -m obliqaxref curate --config configs/project.yaml
-
-# Curate without answer validation
-python -m obliqaxref curate --config configs/project.yaml --skip-answer
-```
-
----
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| "Document not found" | Check `data_dir` in config |
-| Generate timeout | Reduce `max_pairs` in config |
-| Judge API errors | Verify Azure OpenAI keys in `.env` |
-| Low KEEP percentage | Expected (most items need judge); check judge results |
-| No output files | Verify `output_dir` permissions |
+| Issue | Check |
+| --- | --- |
+| Missing final items | Confirm judge PASS and answer PASS files exist under `curate_judge/` and `curate_answer/`. |
+| Unexpected low retrieval agreement | IR is diagnostic; inspect `ir_difficulty_label` and pair metrics rather than dropping items. |
+| CE reranker errors | Confirm `sentence_transformers` dependencies and model availability. |
+| Missing XRefExpand runs | Confirm `crossref_resolved.cleaned.csv` exists and base TREC runs were written. |
+| Missing answer-quality joins | Confirm `retrieval_diagnostics_per_query.csv` and `answer_eval_*_test.json` are under the same root. |
 
-See stage-specific documentation for detailed troubleshooting.
+## License
 
----
-
-## Citation & License
-
-**License**: MIT (see [LICENSE](LICENSE))
-
-**Citation**:
-```bibtex
-@software{ObliQAXRef2024,
-  title={ObliQA-XRef: Cross-Reference-Aware Benchmark for Citation-Dependent Regulatory Question Answering},
-  author={RegNLP},
-  year={2024},
-  url={https://github.com/RegNLP/ObliQA-XRef}
-}
-```
-
----
-
-## Documentation
-
-- [Adapter Documentation](docs/adapter/README.md) — Extraction and normalization
-- [Generator Documentation](docs/generator/README.md) — Schema and DPEL generation
-- [Curation Documentation](docs/curation/README.md) — Filtering and validation
-- [Configuration Reference](configs/project.yaml) — All tunable parameters
-
----
-
-## Contributing
-
-We welcome contributions! Please submit issues and pull requests.
-
-## Support
-
-For questions or issues, open a GitHub issue on the [ObliQA-XRef repository](https://github.com/RegNLP/ObliQA-XRef).
+MIT. See [LICENSE](LICENSE).

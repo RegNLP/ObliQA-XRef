@@ -3,6 +3,7 @@ from .dense import DenseRetriever
 from .eval import run_evaluation
 from .fusion import RRFFusion
 from .rerank import CrossEncoderReranker
+from .xref_expand import XRefGraph, expand_retrieval_run, load_xref_graph
 
 __all__ = [
     "run_evaluation",
@@ -10,6 +11,9 @@ __all__ = [
     "DenseRetriever",
     "RRFFusion",
     "CrossEncoderReranker",
+    "XRefGraph",
+    "load_xref_graph",
+    "expand_retrieval_run",
 ]
 """
 IR module: Indexing and retrieval for ObliQA-XRef.
@@ -30,4 +34,7 @@ __all__ = [
     "DenseRetriever",
     "RRFFusion",
     "CrossEncoderReranker",
+    "XRefGraph",
+    "load_xref_graph",
+    "expand_retrieval_run",
 ]

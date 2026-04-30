@@ -12,6 +12,14 @@ from pathlib import Path
 
 from obliqaxref.eval.DownstreamEval import answer_gen_eval as answer_gen_mod
 from obliqaxref.eval.DownstreamEval import ir_eval as ir_eval_mod
+from obliqaxref.eval.Analysis.answer_quality_by_retrieval import (
+    answer_quality_by_retrieval_outcome,
+)
+from obliqaxref.eval.Analysis.benchmark_statistics import generate_benchmark_statistics
+from obliqaxref.eval.Analysis.human_audit import (
+    aggregate_human_audit,
+    export_human_audit_sample,
+)
 from obliqaxref.eval.FinalizeDataset.finalize_dataset import finalize_dataset_main
 from obliqaxref.eval.HumanEval.compute import create_human_eval_combined
 from obliqaxref.eval.ResourceStats.compute import main as resourcestats_main
@@ -55,6 +63,9 @@ def _stage_dataset_layout(corpus: str, out_dir: Path) -> Path:
         "bm25.trec": gen_dir / "bm25.trec",
         "e5.trec": gen_dir / "ft_e5.trec",  # rename ft_e5 -> e5
         "rrf.trec": gen_dir / "rrf_bm25_e5.trec",  # rename rrf_bm25_e5 -> rrf
+        "bm25_xref_expand.trec": gen_dir / "bm25_xref_expand.trec",
+        "e5_xref_expand.trec": gen_dir / "e5_xref_expand.trec",
+        "rrf_xref_expand.trec": gen_dir / "rrf_xref_expand.trec",
         "ce_rerank_union200.trec": gen_dir / "ce_rerank_union200.trec",
     }
     for dst_name, src_path in trec_sources.items():
@@ -231,6 +242,73 @@ def main():
     ans_eval.add_argument(
         "--nli-model", default="cross-encoder/nli-deberta-v3-base", help="External NLI model name"
     )
+
+    quality_parser = subparsers.add_parser(
+        "answer-quality-by-retrieval",
+        help="Join answer evaluation outputs with retrieval outcome diagnostics",
+    )
+    quality_parser.add_argument(
+        "--root", default="ObliQA-XRef_Out_Datasets", help="Root output directory"
+    )
+    quality_parser.add_argument(
+        "--diagnostics",
+        default=None,
+        help="Path to retrieval_diagnostics_per_query.csv (default: <root>/retrieval_diagnostics_per_query.csv)",
+    )
+    quality_parser.add_argument("--out", default=None, help="Output directory (default: --root)")
+    quality_parser.add_argument("--corpus", default=None, choices=["ukfin", "adgm"])
+    quality_parser.add_argument(
+        "--min-group-size", type=int, default=5, help="Small-group warning threshold"
+    )
+
+    audit_export = subparsers.add_parser(
+        "human-audit-export", help="Export a stratified CSV sample for manual audit"
+    )
+    audit_export.add_argument(
+        "--input",
+        nargs="*",
+        default=None,
+        help="Input final_answer_valid JSONL/CSV files (default: runs/curate_*/out/final_answer_valid.jsonl)",
+    )
+    audit_export.add_argument("--out", default="ObliQA-XRef_Out_Datasets", help="Output directory")
+    audit_export.add_argument("--n", type=int, default=200, help="Requested sample size")
+    audit_export.add_argument("--seed", type=int, default=13, help="Random seed")
+    audit_export.add_argument(
+        "--stratify-persona",
+        action="store_true",
+        help="Include persona in sampling strata",
+    )
+
+    audit_aggregate = subparsers.add_parser(
+        "human-audit-aggregate", help="Aggregate completed human audit annotation CSV files"
+    )
+    audit_aggregate.add_argument("--inputs", nargs="+", required=True, help="Annotation CSV files")
+    audit_aggregate.add_argument(
+        "--out", default="ObliQA-XRef_Out_Datasets", help="Output directory"
+    )
+    audit_aggregate.add_argument(
+        "--min-group-size", type=int, default=5, help="Small-group warning threshold"
+    )
+
+    benchmark_stats = subparsers.add_parser(
+        "benchmark-statistics", help="Generate ObliQA-XRef benchmark statistics tables"
+    )
+    benchmark_stats.add_argument(
+        "--input",
+        nargs="*",
+        default=None,
+        help=(
+            "Final cohort JSONL/CSV files. Default: runs/curate_*/out/"
+            "final_dependency_valid.jsonl, final_answer_valid.jsonl, final_answer_failed.jsonl"
+        ),
+    )
+    benchmark_stats.add_argument(
+        "--out", default="ObliQA-XRef_Out_Datasets", help="Output directory"
+    )
+    benchmark_stats.add_argument(
+        "--min-group-size", type=int, default=5, help="Small-group warning threshold"
+    )
+
     ans_parser.add_argument("--k", type=int, default=10, help="Top-k passages to use per query")
     ans_parser.add_argument("--root", default="ObliQA-XRef_Out_Datasets", help="Root output directory")
     ans_parser.add_argument(
@@ -453,6 +531,46 @@ def main():
                 use_external_nli=args.ext_nli,
                 nli_model_name=args.nli_model,
             )
+
+    elif args.command == "answer-quality-by-retrieval":
+        paths = answer_quality_by_retrieval_outcome(
+            root_dir=args.root,
+            diagnostics_path=args.diagnostics,
+            out_dir=args.out,
+            corpus=args.corpus,
+            min_group_size=args.min_group_size,
+        )
+        for label, path in paths.items():
+            logger.info("Wrote %s: %s", label, path)
+
+    elif args.command == "human-audit-export":
+        paths = export_human_audit_sample(
+            inputs=args.input,
+            out_dir=args.out,
+            n=args.n,
+            seed=args.seed,
+            stratify_persona=args.stratify_persona,
+        )
+        for label, path in paths.items():
+            logger.info("Wrote %s: %s", label, path)
+
+    elif args.command == "human-audit-aggregate":
+        paths = aggregate_human_audit(
+            inputs=args.inputs,
+            out_dir=args.out,
+            min_group_size=args.min_group_size,
+        )
+        for label, path in paths.items():
+            logger.info("Wrote %s: %s", label, path)
+
+    elif args.command == "benchmark-statistics":
+        paths = generate_benchmark_statistics(
+            inputs=args.input,
+            out_dir=args.out,
+            min_group_size=args.min_group_size,
+        )
+        for label, path in paths.items():
+            logger.info("Wrote %s: %s", label, path)
 
     else:
         parser.print_help()

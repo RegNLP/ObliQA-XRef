@@ -20,6 +20,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from obliqaxref.benchmark_metadata import (
+    OBLIQA_XREF_METADATA_FIELDS,
+    add_obliqa_xref_metadata_inplace,
+)
 from obliqaxref.config import RunConfig
 from obliqaxref.utils.io import ensure_dir
 
@@ -212,13 +216,22 @@ def assign_difficulty_tier(ir_difficulty_label: str) -> str:
 
 # CSV columns written for every benchmark export
 _BENCHMARK_CSV_FIELDS = (
+    *OBLIQA_XREF_METADATA_FIELDS,
     "item_id",
     "question",
     "gold_answer",
     "source_passage_id",
     "target_passage_id",
+    "source_text",
+    "target_text",
+    "reference_text",
+    "reference_type",
     "method",
     "pair_uid",
+    "persona",
+    "citation_leakage",
+    "citation_leakage_matches",
+    "citation_leakage_types",
     "ir_difficulty_label",
     "difficulty_tier",
     "source_vote_count",
@@ -403,9 +416,20 @@ def assemble_final_benchmark(
             "gold_answer": gold_answer,
             "source_passage_id": source_pid,
             "target_passage_id": target_pid,
+            "source_text": gen.get("source_text", ir.get("source_text", "")),
+            "target_text": gen.get("target_text", ir.get("target_text", "")),
+            "reference_text": gen.get("reference_text", ir.get("reference_text", "")),
+            "reference_type": gen.get("reference_type", ir.get("reference_type", "")),
             "method": gen.get("method", ir.get("method", "")),
             "pair_uid": gen.get("pair_uid", ir.get("pair_uid", "")),
             "persona": gen.get("persona", ir.get("persona", "")),
+            "citation_leakage": gen.get("citation_leakage", ir.get("citation_leakage", False)),
+            "citation_leakage_matches": gen.get(
+                "citation_leakage_matches", ir.get("citation_leakage_matches", [])
+            ),
+            "citation_leakage_types": gen.get(
+                "citation_leakage_types", ir.get("citation_leakage_types", [])
+            ),
             "ir_difficulty_label": ir_label,
             "difficulty_tier": assign_difficulty_tier(ir_label),
             "source_vote_count": ir.get("source_vote_count", 0),
@@ -443,6 +467,7 @@ def assemble_final_benchmark(
                 "answer_supported_by_judge", ir.get("answer_supported_by_judge")
             ),
         }
+        add_obliqa_xref_metadata_inplace(record)
         records_by_id[iid] = record
 
     dependency_valid_items = [records_by_id[iid] for iid in sorted(dependency_valid_ids)]
@@ -517,6 +542,7 @@ def assemble_final_benchmark(
         "answer_validation_failed_count": len(answer_failed_items),
         "final_dependency_valid_count": len(dependency_valid_items),
         "final_answer_valid_count": len(answer_valid_items),
+        "final_answer_failed_count": len(answer_failed_items),
         "final_export_basis": final_export_basis,
         "total_final": len(compatibility_items),
         "total_hard": len(hard_items),

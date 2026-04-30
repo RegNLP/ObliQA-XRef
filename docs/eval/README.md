@@ -1,188 +1,143 @@
-# ObliQA-XRef Evaluation Module
+# ObliQA-XRef Evaluation And Analysis
 
-## Overview
+The evaluation module finalizes curated cohorts, stages retrieval runs, evaluates retrieval/answer quality, and writes analysis exports.
 
-The Evaluation Module (src/obliqaxref/eval) provides both intrinsic and downstream evaluation for the ObliQA-XRef benchmark.
+Unified CLI:
 
-- Intrinsic: Resource statistics, dataset finalization, human-eval CSVs.
-- Downstream: IR metrics on test split, answer generation, and answer quality evaluation (tags, length, ROUGE-L, overlap, policy violations, GPT scoring, and NLI).
-
-It is driven by a unified CLI: `python -m obliqaxref.eval.cli`.
-
----
-
-## Directory Structure
-
-```
-src/obliqaxref/eval/
-├── cli.py                         # Unified CLI: finalize, humaneval, ir, answer, answer-eval, pipeline
-├── run.py                         # Legacy shim to CLI
-├── README.md                      # Module overview (legacy)
-├── ResourceStats/                 # Intrinsic corpus/benchmark stats
-│   ├── compute.py                 # Computes corpus, crossref, and benchmark pipeline stats
-│   └── cli.py                     # (Optional) direct CLI
-├── HumanEval/
-│   └── compute.py                 # Builds combined CSV for human annotation
-└── DownstreamEval/
-  ├── ir_eval.py                 # IR evaluation on test split (pytrec_eval metrics + citation diagnostics)
-  ├── answer_gen_eval.py         # LLM-based answer generation on test split (retrieved-only passages)
-  └── answer_eval.py             # Answer quality evaluation (ID-tags/length/ROUGE-L/overlap/violations/GPT/NLI)
+```bash
+python -m obliqaxref.eval.cli --help
 ```
 
-Outputs are written under `ObliQA-XRef_Out_Datasets/` and `runs/stats/eval/...`.
+## Finalization
 
----
+The default experimental cohort is `answer_valid`.
 
-## Quick Start
-
-Environment:
-- Python 3.10+
-- Install project (dev): `pip install -e ".[dev]"`
-- For GPT-based scoring: set Azure OpenAI env vars (AZURE_OPENAI_DEPLOYMENT_GPT52 or AZURE_OPENAI_DEPLOYMENT, endpoint, key).
-
-End-to-end (dev-scale):
-```
-python -m obliqaxref.eval.cli pipeline
-python -m obliqaxref.eval.cli answer-eval
+```bash
+python -m obliqaxref.eval.cli finalize --corpus both --cohort answer_valid
 ```
 
-Individual steps:
-```
-# 1) Finalize datasets and splits from generator outputs
-python -m obliqaxref.eval.cli finalize
+This reads `runs/curate_<corpus>/out/final_answer_valid.jsonl` and writes:
 
-# 2) Intrinsic stats (corpus/crossref/benchmark)
-#   Writes: runs/stats/eval/resourcestats/{corpus}/resource_stats.json
-python -m obliqaxref.eval.cli pipeline   # (includes stats)
-
-# 3) HumanEval combined CSV
-#   Writes: ObliQA-XRef_Out_Datasets/humaneval_combined_{corpus}.csv
-python -m obliqaxref.eval.cli humaneval --corpus both
-
-# 4) IR evaluation on test split
-#   Reads: ObliQA-XRef_Out_Datasets/ObliQA-XRef-{CORPUS}-ALL/{test.jsonl,*.trec}
-#   Writes: ObliQA-XRef_Out_Datasets/ir_eval_{corpus}_test.json
-python -m obliqaxref.eval.cli ir --corpus both --k 10
-
-# 5) Answer generation on test split
-#   Writes: ObliQA-XRef_Out_Datasets/answer_gen_{corpus}_{method}_test.json
-python -m obliqaxref.eval.cli answer --corpus both --methods bm25 e5 rrf ce_rerank_union200
-
-# 6) Answer evaluation (structural + GPT + external NLI)
-#   Writes: ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_{method}_test.json
-python -m obliqaxref.eval.cli answer-eval
+```text
+ObliQA-XRef_Out_Datasets/
+  ObliQA-XRef-ADGM-ALL.jsonl
+  ObliQA-XRef-ADGM-ALL-train.jsonl
+  ObliQA-XRef-ADGM-ALL-dev.jsonl
+  ObliQA-XRef-ADGM-ALL-test.jsonl
+  ObliQA-XRef-ADGM-ALL/
+    test.jsonl
+    bm25.trec
+    e5.trec
+    rrf.trec
+    bm25_xref_expand.trec
+    e5_xref_expand.trec
+    rrf_xref_expand.trec
+    ce_rerank_union200.trec
 ```
 
----
+Older cohort aliases are accepted, but current policy distinguishes `dependency_valid`, `answer_valid`, and `answer_failed`.
 
-## Intrinsic Evaluation
+## Retrieval Evaluation
 
-### ResourceStats
-Computes three groups per corpus:
-- Corpus statistics: #docs/#passages, length distributions, histograms
-- Crossref statistics: edge counts, coverage, types
-- Benchmark pipeline: generated → keep → judge → final; lengths and diversity
+Supported runs:
 
-Output: `runs/stats/eval/resourcestats/{corpus}/resource_stats.json`
+- BM25
+- E5
+- RRF
+- CE reranker over union candidates
+- BM25+XRefExpand
+- E5+XRefExpand
+- RRF+XRefExpand, if available
 
-### HumanEval
-Builds a stratified subset for human annotation across method/split/persona.
-- Input: test/dev/train JSONL splits under `ObliQA-XRef_Out_Datasets/ObliQA-XRef-{CORPUS}-ALL(-{split}.jsonl)`
-- Output: `ObliQA-XRef_Out_Datasets/humaneval_combined_{corpus}.csv`
+The CE reranker scores `(question text, passage text)` pairs, not `(query_id, passage text)`.
 
----
-
-## Downstream Evaluation
-
-### IR Evaluation (ir_eval.py)
-- Inputs: test split JSONL and method TREC files under `ObliQA-XRef_Out_Datasets/ObliQA-XRef-{CORPUS}-ALL/`
-- Metrics: Recall@k, MAP@k, nDCG@k (pytrec_eval), plus citation-aware diagnostics (Both/SRC-only/TGT-only/Neither@k).
-- Output: `ObliQA-XRef_Out_Datasets/ir_eval_{corpus}_test.json`
-
-CLI:
-```
+```bash
 python -m obliqaxref.eval.cli ir --corpus both --k 10
 ```
 
-### Answer Generation (answer_gen_eval.py)
-- Generates an answer JSON per method using the test split items.
-- Context uses ONLY the top-k retrieved passages; no SOURCE/TARGET roles are exposed.
-- Answers must be concise (about 90–140 words), grounded in the provided passages, and cite only used passages via evidence tags in the form `[#ID:PASSAGE_ID]` (at most one tag per sentence unless truly synthesizing).
-- If retrieved text lookup is missing, falls back to the gold pair as generic passages.
-- Requires Azure OpenAI env vars for the chosen deployment (e.g., `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_DEPLOYMENT_GPT52`).
-- Output: `ObliQA-XRef_Out_Datasets/answer_gen_{corpus}_{subset}_{method}_test.json`
+Outputs:
 
-CLI:
-```
-# via unified CLI
-python -m obliqaxref.eval.cli answer --corpus both --methods bm25 e5 rrf ce_rerank_union200
+- `retrieval_metrics_full.csv`
+- `retrieval_diagnostics_per_query.csv`
 
-# or direct runner (also supports auto-eval with --eval)
-python src/obliqaxref/eval/DownstreamEval/answer_gen_eval.py \
-  --corpus both --subset both --k 10 --root ObliQA-XRef_Out_Datasets \
-  --method all --model gpt-5.2-MBZUAI --eval
-```
+Metrics:
 
-### Answer Evaluation (answer_eval.py)
-- Structural: ID-tag presence and alignment with retrieved docids (`[#ID:PASSAGE_ID]`), length, ROUGE-L (LCS), passage-overlap, citation-like violations.
-- GPT-based: `gpt_relevance` and `gpt_faithfulness` (0.0–1.0) via Azure model.
-- NLI: external CrossEncoder (default `cross-encoder/nli-deberta-v3-base`) with confidence and per-class scores; GPT NLI as fallback.
-- Outputs per subset×method: `ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_{subset}_{method}_test.json` (per-item results + summary).
-- Compact CSV per corpus: `ObliQA-XRef_Out_Datasets/answer_eval_{corpus}_compact.csv`.
+- Recall@5/10/20
+- MAP@5/10/20
+- nDCG@5/10/20
+- Both@5/10/20
+- SRC-only@5/10/20
+- TGT-only@5/10/20
+- Neither@5/10/20
+- PairMRR
 
-CLI (defaults: both corpora, all methods, GPT scoring + external NLI enabled):
-```
-python -m obliqaxref.eval.cli answer-eval
+## Answer Generation And Evaluation
+
+```bash
+python -m obliqaxref.eval.cli answer \
+  --corpus both \
+  --methods bm25 e5 rrf ce_rerank_union200
+
+python -m obliqaxref.eval.cli answer-eval --corpus both
 ```
 
-Fields in per-item results:
-- `has_answer`, `len_words`
-- `has_id_tag`, `n_id_tags`, `n_id_tags_in_topk`, `id_tags`
-- `rougeL_f1`, `passage_overlap_frac`, `has_citation_like`
-- `gpt_relevance`, `gpt_faithfulness`
-- `nli_label`, `nli_scores` (entailment/contradiction/neutral), `nli_confidence`
+Answer generation uses retrieved passages only, without revealing SOURCE/TARGET roles. Answer evaluation writes per-item JSON plus compact summaries:
 
-Summary fields:
-- `has_id_tag_frac`, `avg_n_id_tags`, `avg_n_id_tags_in_topk`, `has_citation_like_frac`
-- `avg_len_words`, `avg_rougeL_f1`, `avg_passage_overlap_frac`
-- `avg_gpt_relevance`, `avg_gpt_faithfulness`
-- `nli_label_dist`, `nli_avg_scores`, `avg_nli_confidence`
+- `answer_gen_{corpus}_{subset}_{method}_test.json`
+- `answer_eval_{corpus}_{subset}_{method}_test.json`
+- `answer_eval_{corpus}_compact.csv`
 
----
+## Analysis Utilities
 
-## Data Flow
+```bash
+# Join retrieval outcome with answer quality
+python -m obliqaxref.eval.cli answer-quality-by-retrieval \
+  --root ObliQA-XRef_Out_Datasets
 
-```
-1) Finalize
-   ObliQA-XRef_Out_Datasets/
-     ObliQA-XRef-{CORPUS}-ALL(-{split}.jsonl)
+# Export human audit sample
+python -m obliqaxref.eval.cli human-audit-export \
+  --input runs/curate_adgm/out/final_answer_valid.jsonl runs/curate_ukfin/out/final_answer_valid.jsonl \
+  --out ObliQA-XRef_Out_Datasets \
+  --n 200 --seed 13
 
-2) IR Eval
-   ObliQA-XRef_Out_Datasets/
-     ir_eval_{corpus}_test.json
+# Aggregate completed annotations
+python -m obliqaxref.eval.cli human-audit-aggregate \
+  --inputs ann1.csv ann2.csv \
+  --out ObliQA-XRef_Out_Datasets
 
-3) Answer Gen
-   ObliQA-XRef_Out_Datasets/
-     answer_gen_{corpus}_{method}_test.json
-
-4) Answer Eval
-   ObliQA-XRef_Out_Datasets/
-     answer_eval_{corpus}_{method}_test.json
+# Benchmark statistics and paper-ready tables
+python -m obliqaxref.eval.cli benchmark-statistics \
+  --out ObliQA-XRef_Out_Datasets
 ```
 
----
+Analysis outputs:
 
-## Troubleshooting
+- `answer_quality_by_retrieval_outcome.csv`
+- `answer_quality_by_retrieval_outcome_summary.csv`
+- `answer_quality_by_retrieval_outcome_summary.md`
+- `human_audit_sample.csv`
+- `human_audit_sampling_report.json`
+- `human_audit_instructions.md`
+- `human_audit_aggregated_items.csv`
+- `human_audit_summary.csv`
+- `human_audit_summary.md`
+- `human_audit_agreement.json`
+- `benchmark_statistics.csv`
+- `benchmark_statistics_by_difficulty.csv`
+- `benchmark_statistics_summary.md`
+- `benchmark_statistics_latex_tables.tex`
 
-- Missing splits: finalize stage produces `ObliQA-XRef-{CORPUS}-ALL-{split}.jsonl`. The CLI stages folder layout automatically.
-- TREC not found: ensure `runs/generate_{corpus}/out/*.trec` exist; CLI copies them under the dataset folder.
-- Azure model fails: verify env vars `AZURE_OPENAI_*` and deployment name; GPT features can be disabled with `--no-gpt`.
-- External NLI download timeouts: rerun; model is cached locally once downloaded.
+## Resource Statistics
 
----
+Legacy resource-stat utilities remain available for corpus and cross-reference summaries:
 
-## Notes
+```bash
+python src/obliqaxref/eval/ResourceStats/cli.py compute --corpus adgm
+python src/obliqaxref/eval/ResourceStats/cli.py compute --corpus ukfin
+```
 
-- All CLIs default to processing both corpora when `--corpus both`.
-- Answer length and tag constraints mirror generation-time rules (160–230 words, both tags mandatory).
-- The evaluation metrics are designed to be lightweight, repeatable, and transparent.
+For current benchmark cohort reporting, prefer:
+
+```bash
+python -m obliqaxref.eval.cli benchmark-statistics
+```

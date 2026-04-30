@@ -70,6 +70,23 @@ python scripts/test_llm.py
 
 Tests Azure OpenAI connection with gpt-5.2-MBZUAI deployment.
 
+## Benchmark Statistics
+
+For current final-cohort reporting, prefer the unified eval CLI:
+
+```bash
+python -m obliqaxref.eval.cli benchmark-statistics \
+  --out ObliQA-XRef_Out_Datasets
+```
+
+This reads explicit final cohort files when present:
+
+- `final_dependency_valid.jsonl`
+- `final_answer_valid.jsonl`
+- `final_answer_failed.jsonl`
+
+and writes CSV, Markdown, and LaTeX statistics tables.
+
 ## Paper Tables
 
 ### Generate Publication Tables
@@ -77,4 +94,4 @@ Tests Azure OpenAI connection with gpt-5.2-MBZUAI deployment.
 python scripts/build_paper_tables.py
 ```
 
-Generates formatted tables for publication/reporting.
+Generates legacy formatted tables for publication/reporting. Prefer `benchmark-statistics` for revised difficulty-aware ObliQA-XRef cohort reporting.

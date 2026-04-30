@@ -395,7 +395,15 @@ def main(
     root = Path(root_dir)
 
     if methods is None:
-        methods = ["bm25", "e5", "rrf", "ce_rerank_union200"]
+        methods = [
+            "bm25",
+            "e5",
+            "rrf",
+            "bm25_xref_expand",
+            "e5_xref_expand",
+            "rrf_xref_expand",
+            "ce_rerank_union200",
+        ]
 
     logger.info(f"Running IR evaluation for corpus={corpus} on test split @k={k}")
     items_all = load_test_split(corpus, root=root)
@@ -416,7 +424,11 @@ def main(
         results_sub: dict[str, dict[str, float]] = {}
         for method in methods:
             logger.info(f"  method={method} on subset={subset} ...")
-            run = load_trec_run(corpus, method, root=root, normalize_docids=normalize_docids)
+            try:
+                run = load_trec_run(corpus, method, root=root, normalize_docids=normalize_docids)
+            except FileNotFoundError as exc:
+                logger.warning("  Skipping missing TREC run: %s", exc)
+                continue
             metrics = compute_metrics(
                 run=run,
                 qrels=qrels_sub,

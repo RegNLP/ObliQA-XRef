@@ -43,7 +43,7 @@ class CrossEncoderReranker:
 
         logger.info(f"Loading cross-encoder: {model_name}")
         self.model = CrossEncoder(model_name, device=device)
-        logger.info(f"Cross-encoder loaded on {self.model.device}")
+        logger.info("Cross-encoder loaded on %s", getattr(self.model, "device", "unknown device"))
 
     def rerank(
         self,

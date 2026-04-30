@@ -97,7 +97,7 @@ Adapter Outputs                Generator Pipeline               Output Q&A Items
 Each pair must pass ALL checks:
 1. **Text availability**: Both source and target text must be non-empty
 2. **Degenerate pair**: Reject if `source_uid == target_uid` (self-citations are invalid)
-3. **Title-like target** (optional): Drop pairs where target is purely a heading/title (controlled by `--drop_title_targets`, default: True)
+3. **Title-like target** (optional): Drop pairs where target is purely a heading/title (controlled by `--drop-title-targets`, default: enabled)
 4. **Minimum text length**: Both passages must have substantive content (checked during validation)
 
 #### **[G4] Method Selection**
@@ -148,10 +148,9 @@ After each Q&A item is validated, the generator scans both the question and answ
 
 | Field | Type | Meaning |
 |---|---|---|
-| `question_has_leakage` | bool | Question prose contains a citation-like identifier |
-| `answer_has_leakage` | bool | Answer prose contains a citation-like identifier |
-| `leakage_spans_question` | list[str] | Matched spans in question |
-| `leakage_spans_answer` | list[str] | Matched spans in answer |
+| `citation_leakage` | bool | Generated prose contains a citation-like identifier |
+| `citation_leakage_matches` | list[str] | Matched citation-like spans |
+| `citation_leakage_types` | list[str] | Detector categories for matched spans |
 
 **Configurable action** (`citation_leakage_action`):
 
@@ -266,7 +265,18 @@ The SCHEMA prompt mirrors the same policy:
 | Setting | Old default | New default |
 |---|---|---|
 | `no_citations` | `False` | `True` |
+| `no_citations_in_question` | not enforced separately | `True` |
 | `dual_anchors_mode` | `"freeform_only"` | `"always"` |
+
+### Difficulty-aware sampling and pilot mode
+
+The current generator can sample cross-reference pairs with difficulty-aware controls from YAML. Pilot mode redirects outputs to a pilot-specific location so small end-to-end runs do not overwrite full artifacts.
+
+Example:
+
+```bash
+python -m obliqaxref generate --config configs/adgm_dev.yaml
+```
 
 ---
 
@@ -392,7 +402,7 @@ generation:
 - Answer length: **160–230 words** (hard limits at LLM level)
 - Both passage tags present and distinct: `[#SRC:uid] != [#TGT:uid]`
 - Question and answer are non-empty after whitespace normalization
-- Optional: answer must not contain rule/section IDs if `--no_citations` is set (but tags are always allowed)
+- Optional: answer must not contain rule/section IDs if no-citation policy is enabled (tags are always allowed)
 - Optional: global dedup by normalized question if `--dedup` is enabled
 
 **Statistics** (from real run):
@@ -549,10 +559,10 @@ generation:
   },
 
   "outputs": {
-    "dpel/dpel.qa.jsonl": "runs/generate_ukfin/dpel/dpel.qa.jsonl",
-    "schema/schema.extraction.jsonl": "runs/generate_ukfin/schema/schema.extraction.jsonl",
-    "schema/schema.qa.jsonl": "runs/generate_ukfin/schema/schema.qa.jsonl",
-    "stats/generate_report.json": "runs/generate_ukfin/stats/generate_report.json"
+    "dpel/dpel.qa.jsonl": "runs/generate_ukfin/out/dpel/dpel.qa.jsonl",
+    "schema/schema.extraction.jsonl": "runs/generate_ukfin/out/schema/schema.extraction.jsonl",
+    "schema/schema.qa.jsonl": "runs/generate_ukfin/out/schema/schema.qa.jsonl",
+    "stats/generate_report.json": "runs/generate_ukfin/out/stats/generate_report.json"
   },
 
   "run_time_seconds": 1247.3,
@@ -565,7 +575,7 @@ generation:
 - **n_pairs_kept_after_filter**: Pairs surviving filter step (degenerate, title, empty text)
 - **dropped_title_targets**: Count of pairs dropped because target is a heading
 - **dropped_invalid_tags**: Count of Q&As that lacked both required tags
-- **dropped_citation_policy**: Count of Q&As rejected due to `--no_citations` rule
+- **dropped_citation_policy**: Count of Q&As rejected due to no-citation policy
 - **dropped_dedup**: Count of exact duplicate questions removed
 - Success rate = (qas_created / pairs_processed) × 100%
 
@@ -633,14 +643,14 @@ python -m obliqaxref generate [--config PATH] [OPTIONS]
   - Same seed + same input = reproducible outputs
 
 **Content Control**:
-- `--max_q_per_pair N` (default: depends on preset)
+- `--max-q-per-pair N` (default: depends on preset)
   - Maximum questions per pair per method
   - Overrides preset value if provided
-- `--no_citations` (flag)
+- `--no-citations/--allow-citations`
   - Forbid rule/section IDs in question and answer text
   - Evidence tags `[#SRC:uid]` and `[#TGT:uid]` are still required
   - Useful for testing robustness of Q&A to stripped-down passages
-- `--drop_title_targets` (default: True)
+- `--drop-title-targets/--keep-title-targets` (default: drop title targets)
   - Automatically filter pairs where target is a heading/title
   - Set to False to include all pairs (not recommended)
 - `--dedup` (default: True)
@@ -653,7 +663,7 @@ python -m obliqaxref generate [--config PATH] [OPTIONS]
   - Load data, build pairs, apply filters, write empty reports
   - No LLM calls; useful for validating config and input data
   - Runs in seconds instead of minutes/hours
-- `--row_sample_n N` (default: depends on preset)
+- `--row-sample-n N` (default: depends on preset)
   - Sample N rows from CSV before building pairs
   - Overrides preset if provided
   - Useful for quick testing on subset of citations
@@ -685,7 +695,7 @@ python -m obliqaxref generate \
 # Manual override (100 pairs, DPEL only, dedup disabled)
 python -m obliqaxref generate \
   --config configs/project.yaml \
-  --max_pairs 100 \
+  --max-pairs 100 \
   --method dpel \
   --dedup false
 ```
@@ -950,7 +960,7 @@ if not result.ok:
 | **has_required_tags** | Citation dependency proof | Missing `[#SRC:...]` or `[#TGT:...]` |
 | **answer_length** | Substantive answer (not trivial) | < 160 or > 230 words |
 | **non_empty_q_a** | Malformed output | Q or A is empty/whitespace |
-| **citation_policy** | Optional content control | `--no_citations` set and rule/section ID found in Q/A text |
+| **citation_policy** | Optional content control | no-citation policy enabled and rule/section ID found in Q/A text |
 | **dedup** | Prevent duplicates | Normalized question matches existing question |
 | **json_parse** | Output structure | JSON malformed or missing required fields |
 
@@ -967,7 +977,7 @@ These patterns are dropped before generation:
 | **Title-like target** | Target is a heading, not substantive | ✓ | Answers would be trivial |
 | **Identical text** | Source and target identical | ✓ | No citation relationship |
 
-**Title detection heuristic** (used by `--drop_title_targets`):
+**Title detection heuristic** (used by `--drop-title-targets`):
 
 A passage is considered "title-like" if:
 - < 80 characters AND
@@ -977,7 +987,7 @@ A passage is considered "title-like" if:
 - Low stopword ratio (< 18% function words) AND
 - Matches heading cue patterns (e.g., "Definitions", "Scope", "Part 2")
 
-**Score >= 3 → title** (dropped if `--drop_title_targets=True`)
+**Score >= 3 → title** (dropped if title-target filtering is enabled)
 
 ---
 
@@ -1025,7 +1035,7 @@ CSV rows
    ↓
 [5] Apply pair filters
    ├─ Reject: source == target (degenerate)
-   ├─ Reject: target is title (if --drop_title_targets)
+   ├─ Reject: target is title (if --drop-title-targets)
    └─ Keep: valid pair
    ↓
 [6] Cap by max_pairs (cost control)
@@ -1088,7 +1098,7 @@ def _load_existing_qas(qa_path: str) -> set[str]:
     return processed
 
 # In main loop
-dpel_processed = _load_existing_qas("runs/generate_ukfin/dpel/dpel.qa.jsonl")
+dpel_processed = _load_existing_qas("runs/generate_ukfin/out/dpel/dpel.qa.jsonl")
 pairs_to_process_dpel = [p for p in pairs if p.pair_uid not in dpel_processed]
 ```
 
@@ -1131,17 +1141,17 @@ This enables cost-efficient iteration: if a run fails after 12 hours, resume wit
 Use **presets** and **limits** to manage cost:
 
 ```bash
-# Fast iteration (cost ~$0.50)
-python -m obliqaxref generate --preset smoke --dry_run
+# Fast iteration
+python -m obliqaxref generate --config configs/project.yaml --preset smoke --dry_run
 
-# Development (cost ~$5)
-python -m obliqaxref generate --preset dev --method both
+# Development
+python -m obliqaxref generate --config configs/project.yaml --preset dev --method both
 
-# Production (cost ~$50+)
-python -m obliqaxref generate --preset paper --method both
+# Production
+python -m obliqaxref generate --config configs/project.yaml --preset paper --method both
 
 # Custom limit (cost controlled)
-python -m obliqaxref generate --max_pairs 100 --max_q_per_pair 1 --method dpel
+python -m obliqaxref generate --config configs/project.yaml --max-pairs 100 --method dpel
 ```
 
 ---
@@ -1162,7 +1172,7 @@ python -m obliqaxref generate --max_pairs 100 --max_q_per_pair 1 --method dpel
 
 **Solution**:
 ```bash
-python -m obliqaxref generate --drop_title_targets false
+python -m obliqaxref generate --config configs/project.yaml --drop-title-targets false
 ```
 
 This disables title filtering; note that answers may be trivial for heading passages.
@@ -1173,10 +1183,10 @@ This disables title filtering; note that answers may be trivial for heading pass
 **Solution**:
 ```bash
 # Use preset to control pair count
-python -m obliqaxref generate --preset dev
+python -m obliqaxref generate --config configs/project.yaml --preset dev
 
 # Or manually cap
-python -m obliqaxref generate --max_pairs 100 --max_q_per_pair 1
+python -m obliqaxref generate --config configs/project.yaml --max-pairs 100
 ```
 
 ### Issue: Resume not working (reprocessing pairs)
@@ -1185,15 +1195,11 @@ python -m obliqaxref generate --max_pairs 100 --max_q_per_pair 1
 **Solution**:
 ```bash
 # Check if output files exist
-ls -la runs/generate_ukfin/dpel/dpel.qa.jsonl
-ls -la runs/generate_ukfin/schema/schema.qa.jsonl
-
-# If missing, create empty files
-touch runs/generate_ukfin/dpel/dpel.qa.jsonl
-touch runs/generate_ukfin/schema/schema.qa.jsonl
+ls -la runs/generate_ukfin/out/dpel/dpel.qa.jsonl
+ls -la runs/generate_ukfin/out/schema/schema.qa.jsonl
 
 # Then resume
-python -m obliqaxref generate --preset dev --method both
+python -m obliqaxref generate --config configs/project.yaml --preset dev --method both
 ```
 
 ---
@@ -1203,13 +1209,15 @@ python -m obliqaxref generate --preset dev --method both
 The generator outputs feed into the **curation module**:
 
 **Input to curator**:
+- `generator/items.jsonl`
 - `dpel/dpel.qa.jsonl`
 - `schema/schema.qa.jsonl`
 
 **Tasks in curation**:
-- Filter by citation dependency quality (judge human agreement)
-- Add metadata (difficulty, domain, reasoning)
-- Finalize for benchmark release
+- Add diagnostic IR difficulty metadata.
+- Apply judge v2 citation-dependency filtering.
+- Apply answer validation for answer-valid export.
+- Write `final_dependency_valid`, `final_answer_valid`, and `final_answer_failed` cohorts.
 
 ---
 

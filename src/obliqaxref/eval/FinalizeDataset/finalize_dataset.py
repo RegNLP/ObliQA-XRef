@@ -21,6 +21,8 @@ import random
 from pathlib import Path
 from typing import Any
 
+from obliqaxref.benchmark_metadata import add_obliqa_xref_metadata_inplace
+
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
@@ -70,7 +72,14 @@ def _extract_record(item: dict[str, Any]) -> dict[str, Any]:
         "target_passage_id": target_pid,
         "method": method,
         "persona": persona,
+        "split": item.get("split", ""),
+        "ir_difficulty_label": item.get("ir_difficulty_label", ""),
+        "reference_type": item.get("reference_type", ""),
+        "citation_leakage": item.get("citation_leakage", False),
+        "answer_validation_passed": item.get("answer_validation_passed"),
+        "judge_schema_version": item.get("judge_schema_version", ""),
     }
+    add_obliqa_xref_metadata_inplace(rec)
     # Return only the flat record fields (no nested 'item' duplicate)
     return rec
 
