@@ -771,11 +771,13 @@ def run(cfg: RunConfig, overrides: CurateOverrides | None = None) -> dict[str, A
         "ir_difficulty_label_counts": label_counts,
         "policy": {
             "ir_role": "diagnostic_only",
-            "selection_criterion": "citation_dependency_validity + answer_validity",
+            "selection_criterion": "citation_dependency_validity",
+            "final_export_basis": getattr(cfg.curation, "final_export_basis", "dependency_valid"),
+            "answer_validation_role": "optional_diagnostic",
             "note": (
                 "IR agreement is stored as ir_difficulty_label metadata. "
-                "Final benchmark selection is based on LLM citation-dependency judge "
-                "and answer validation only."
+                "Final benchmark selection is based on LLM citation-dependency judge PASS; "
+                "answer validation is optional diagnostic only."
             ),
         },
         "ir_runs": list(runs.keys()),
