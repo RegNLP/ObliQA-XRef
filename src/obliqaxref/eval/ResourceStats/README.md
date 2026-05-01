@@ -28,7 +28,7 @@ python -m obliqaxref.eval.cli benchmark-statistics \
   --out ObliQA-XRef_Out_Datasets
 ```
 
-That command reads final cohort files (default primary cohort is dependency-valid):
+That command reads final cohort files (default primary cohort is dependency-valid). For benchmark-wide statistics and difficulty summaries, prefer the unified `benchmark-statistics` tool.
   
   - `final_dependency_valid.jsonl` (primary)
   - `final_answer_valid.jsonl` (optional diagnostic subset)

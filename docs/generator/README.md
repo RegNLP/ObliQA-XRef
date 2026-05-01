@@ -1219,6 +1219,33 @@ The generator outputs feed into the **curation module**:
 - Optionally run answer validation for diagnostic subsets (`final_answer_valid`, `final_answer_failed`).
 - Write `final_dependency_valid` (primary), plus optional diagnostic cohorts.
 
+## Sampling Modes
+
+Two sampling regimes are available via `--sampling-mode` (or YAML `sampling.sampling_mode`):
+
+- `mixed_difficulty`: coverage/natural distribution and dataset size.
+- `hard_enriched`: challenge-oriented pre-generation heuristic that prefers:
+  - lower source–target lexical overlap,
+  - source/target in different documents (when available),
+  - moderately longer passages.
+
+`hard_enriched` is a heuristic (not gold difficulty). It tends to help DPEL difficulty more than SCHEMA.
+
+The generator writes:
+- `stats/sampling_report.json` with `sampling_mode` and feature summaries.
+- `stats/sampled_xrefs_with_features.jsonl` including per-row features; in `hard_enriched` mode, `hard_enriched_score` is included per row for transparency.
+
+### Examples
+
+```bash
+# Mixed difficulty pilot
+python -m obliqaxref generate -c configs/project.yaml --preset dev --sampling-mode mixed_difficulty
+
+# Hard-enriched pilot with dedicated suffix
+python -m obliqaxref generate -c configs/project.yaml --preset dev \
+  --sampling-mode hard_enriched --pilot --pilot-suffix pilot_hardenriched100
+```
+
 ---
 
 ## References & Documentation

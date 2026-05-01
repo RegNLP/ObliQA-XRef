@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def _stage_dataset_layout(corpus: str, out_dir: Path) -> Path:
+def _stage_dataset_layout(corpus: str, out_dir: Path, curate_suffix: str | None = None) -> Path:
     """
     Normalize outputs to expected layout for downstream eval:
     ObliQA-XRef_Out_Datasets/
@@ -58,23 +58,69 @@ def _stage_dataset_layout(corpus: str, out_dir: Path) -> Path:
             logger.warning("Missing split file: %s", src)
 
     # Copy IR runs from generation outputs if present
-    gen_dir = Path(f"runs/generate_{corpus}/out")
-    trec_sources = {
+    base_dir = Path(f"runs/generate_{corpus}/out")
+    gen_dir = base_dir if not curate_suffix else base_dir.parent / f"{base_dir.name}_{curate_suffix}"
+
+    logger.info("Staging IR runs from: %s", gen_dir)
+
+    # Clean any existing staged .trec files to avoid stale/default overwrites
+    for old in (p for p in dst_dir.glob("*.trec") if p.is_file()):
+        try:
+            old.unlink()
+        except Exception:
+            pass
+
+    # Canonical filenames to stage (preserve exact method names)
+    canonical = {
         "bm25.trec": gen_dir / "bm25.trec",
-        "e5.trec": gen_dir / "ft_e5.trec",  # rename ft_e5 -> e5
-        "rrf.trec": gen_dir / "rrf_bm25_e5.trec",  # rename rrf_bm25_e5 -> rrf
+        "ft_e5.trec": gen_dir / "ft_e5.trec",
+        "rrf_bm25_e5.trec": gen_dir / "rrf_bm25_e5.trec",
         "bm25_xref_expand.trec": gen_dir / "bm25_xref_expand.trec",
         "e5_xref_expand.trec": gen_dir / "e5_xref_expand.trec",
         "rrf_xref_expand.trec": gen_dir / "rrf_xref_expand.trec",
         "ce_rerank_union200.trec": gen_dir / "ce_rerank_union200.trec",
     }
-    for dst_name, src_path in trec_sources.items():
+    # Optional legacy aliases for convenience
+    aliases = {
+        "e5.trec": "ft_e5.trec",
+        "rrf.trec": "rrf_bm25_e5.trec",
+    }
+
+    for dst_name, src_path in canonical.items():
+        dst_path = dst_dir / dst_name
         if src_path.exists():
-            shutil.copyfile(src_path, dst_dir / dst_name)
+            shutil.copyfile(src_path, dst_path)
         else:
             logger.warning("Missing IR run: %s", src_path)
 
+    # Write aliases if their canonical targets were staged
+    for alias_name, target_name in aliases.items():
+        src = dst_dir / target_name
+        alias_dst = dst_dir / alias_name
+        try:
+            if src.exists():
+                shutil.copyfile(src, alias_dst)
+        except Exception:
+            pass
+
     return dst_dir
+
+
+def _ensure_ir_runs(corpus: str, out_dir: Path, *, stage_runs: bool = False, curate_suffix: str | None = None) -> Path:
+        """Ensure staged dataset layout exists and contains IR runs.
+
+        - If stage_runs is False and *.trec already exist under the staged dataset dir,
+            do not restage to avoid overwriting pilot-staged runs.
+        - If no *.trec exist or stage_runs is True, stage (copy) from generate outputs.
+        """
+        dst_dir = out_dir / f"ObliQA-XRef-{corpus.upper()}-ALL"
+        # If trec files already present and not forcing restage, leave as-is
+        trecs = list(dst_dir.glob("*.trec")) if dst_dir.exists() else []
+        if trecs and not stage_runs:
+                logger.info("IR runs already present; not restaging for %s", corpus.upper())
+                return dst_dir
+        # Otherwise, stage (will also clean stale trecs)
+        return _stage_dataset_layout(corpus, out_dir, curate_suffix=curate_suffix)
 
 
 def main():
@@ -134,6 +180,12 @@ def main():
         type=int,
         default=42,
         help="Random seed for splitting (default: 42)",
+    )
+    finalize_parser.add_argument(
+        "--curate-suffix",
+        dest="curate_suffix",
+        default=None,
+        help="Optional suffix to read curated outputs from runs/curate_<corpus>/out_<SUFFIX> (default: out)",
     )
 
     # Stats subcommand (Resource statistics)
@@ -201,6 +253,11 @@ def main():
         "--normalize-docids",
         action="store_true",
         help="Normalize doc IDs (strip hyphens) for matching",
+    )
+    ir_parser.add_argument(
+        "--stage-runs",
+        action="store_true",
+        help="Force restaging of IR runs from runs/generate_<corpus>/out[_<SUFFIX>] into --root (default: do not restage if *.trec already present)",
     )
 
     # Answer generation subcommand
@@ -353,8 +410,9 @@ def main():
                 corpus=c,
                 cohort=args.cohort,
                 seed=args.seed,
+                curate_suffix=args.curate_suffix,
             )
-            staged_dir = _stage_dataset_layout(c, out_dir)
+            staged_dir = _stage_dataset_layout(c, out_dir, curate_suffix=args.curate_suffix)
             logger.info("Staged dataset for downstream eval: %s", staged_dir)
 
     elif args.command == "stats":
@@ -472,12 +530,11 @@ def main():
     elif args.command == "ir":
         corpora = ["ukfin", "adgm"] if args.corpus == "both" else [args.corpus]
         for c in corpora:
-            # Ensure expected layout and TREC runs are staged under root
             root_dir = Path(args.root)
             try:
-                _stage_dataset_layout(c, root_dir)
+                _ensure_ir_runs(c, root_dir, stage_runs=args.stage_runs)
             except Exception as e:
-                logger.warning("Could not stage dataset layout for %s: %s", c, e)
+                logger.warning("IR staging check failed for %s: %s", c, e)
 
             ir_eval_mod.main(
                 corpus=c,

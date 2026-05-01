@@ -62,7 +62,7 @@ final_hard.csv
 final_benchmark_stats.json
 ```
 
-`final_benchmark.*` is a compatibility alias controlled by `curation.final_export_basis`; the default downstream basis is `dependency_valid` (judge PASS). `final_answer_valid`/`final_answer_failed` are optional diagnostic subsets when answer validation is run.
+`final_benchmark.*` is a compatibility alias controlled by `curation.final_export_basis`; the default downstream basis is `dependency_valid` (judge PASS). `final_answer_valid`/`final_answer_failed` are optional diagnostic subsets when answer validation is run. `final_hard.*` is derived from diagnostic IR labels and should be interpreted cautiously (IR is not a selection signal).
 
 ## IR Difficulty Metadata
 
@@ -117,7 +117,7 @@ python -m obliqaxref curate --config configs/adgm_dev.yaml
 # Retrieval/debug subcommand
 python -m obliqaxref.curate.cli ir -c configs/adgm_dev.yaml
 
-# Skip answer validation while debugging
+# Skip answer validation (paper-default diagnostic workflow)
 python -m obliqaxref curate --config configs/project.yaml --skip-answer
 ```
 

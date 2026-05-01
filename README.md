@@ -144,6 +144,7 @@ Pair-level retrieval metrics:
 - `PairMRR`
 
 Standard metrics such as Recall@k, MAP@k, and nDCG@k are preserved.
+For citation-dependent QA, retrieving only one of the two evidence passages is insufficient; prefer pair-aware diagnostics (Both@K, SRC-only@K, TGT-only@K, Neither@K, PairMRR) as the primary retrieval indicators.
 
 Examples:
 
@@ -160,6 +161,68 @@ python -m obliqaxref.eval.cli answer-eval --corpus both
 ```
 
 See [docs/eval/README.md](docs/eval/README.md).
+
+## Sampling Regimes
+
+Two pre-generation sampling regimes are supported:
+
+- `mixed_difficulty`: coverage-oriented; approximates a natural distribution and maximizes dataset size while retaining a mix of easier and harder pairs.
+- `hard_enriched`: challenge-oriented heuristic that prefers lower source–target lexical overlap, document diversity, and moderately longer passages. It increases retrieval difficulty partially (especially for DPEL) but does not uniformly make all items hard; SCHEMA often remains easier for dense/RRF.
+
+The generator writes `stats/sampling_report.json` with `sampling_mode`, and `stats/sampled_xrefs_with_features.jsonl` containing per-row features; for `hard_enriched`, a `hard_enriched_score` is included for transparency.
+
+## Pilot Findings (Examples)
+
+- Mixed overnight500
+  - ADGM: generated=300, final benchmark=261 (dependency-valid). Retrieval tends to be easy, especially SCHEMA.
+  - UKFIN: generated=183, final benchmark=116.
+  - Combined final=377.
+- Hard-enriched100
+  - ADGM: generated=67, final benchmark=56.
+  - UKFIN: generated=53, final benchmark=35.
+  - Combined final=91.
+  - Improvements are clearest for DPEL (e.g., ADGM DPEL BM25 Both@10=0.000; UKFIN DPEL CE Both@10=0.000). SCHEMA remains relatively easier for dense/RRF.
+
+These pilots motivate presenting ObliQA-XRef as a benchmark with a natural/coverage subset (mixed_difficulty) and a challenge-oriented subset (hard_enriched), not as uniformly hard.
+
+## Recommended Workflow
+
+1) Generate (mixed_difficulty) and curate:
+
+```bash
+python -m obliqaxref generate -c configs/project.yaml --preset dev --sampling-mode mixed_difficulty
+python -m obliqaxref curate   -c configs/project.yaml --preset dev --skip-answer
+```
+
+2) Generate (hard_enriched) and curate as a challenge subset:
+
+```bash
+python -m obliqaxref generate -c configs/project.yaml --preset dev --sampling-mode hard_enriched \
+  --pilot --pilot-suffix pilot_hardenriched100
+python -m obliqaxref curate   -c configs/project.yaml --preset dev --skip-answer \
+  --pilot --pilot-suffix pilot_hardenriched100
+```
+
+3) Finalize a clean root for downstream diagnostics (no restaging):
+
+```bash
+rm -rf ObliQA-XRef_Out_Datasets/pilot_hardenriched100_clean
+python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid \
+  --curate-suffix pilot_hardenriched100 \
+  --output-dir ObliQA-XRef_Out_Datasets/pilot_hardenriched100_clean
+```
+
+4) Sanity-check staged `.trec` qid counts match the finalized test split.
+
+5) Run IR diagnostics without restaging (default behavior preserves existing `.trec` files):
+
+```bash
+python -m obliqaxref.eval.cli ir --corpus both \
+  --root ObliQA-XRef_Out_Datasets/pilot_hardenriched100_clean \
+  --methods bm25 ft_e5 rrf_bm25_e5 ce_rerank_union200 bm25_xref_expand e5_xref_expand rrf_xref_expand
+```
+
+Warning: do not interpret IR diagnostics if staged `.trec` qids do not match finalized test qids.
 
 ## Analysis Utilities
 

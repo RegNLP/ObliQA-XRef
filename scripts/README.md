@@ -87,6 +87,8 @@ This reads explicit final cohort files when present:
 
 and writes CSV, Markdown, and LaTeX statistics tables.
 
+Note: When evaluating IR diagnostics on finalized roots, do not restage `.trec` files unless you explicitly need to (use `--stage-runs`). This preserves pilot-staged runs and avoids mixing default and pilot outputs.
+
 ## Paper Tables
 
 ### Generate Publication Tables

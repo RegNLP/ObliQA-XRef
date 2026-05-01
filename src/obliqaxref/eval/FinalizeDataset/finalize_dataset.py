@@ -166,6 +166,7 @@ def finalize_dataset_main(
     corpus: str = "adgm",
     cohort: str = "answer_valid",
     seed: int = 42,
+    curate_suffix: str | None = None,
 ):
     """
     Build finalized dataset from curated PASS cohorts.
@@ -177,7 +178,8 @@ def finalize_dataset_main(
     Legacy cohort names are accepted as aliases.
     """
     c = corpus.lower()
-    curate_root = Path(f"runs/curate_{c}/out")
+    base_out = Path(f"runs/curate_{c}/out")
+    curate_root = base_out if not curate_suffix else base_out.parent / f"{base_out.name}_{curate_suffix}"
 
     cohort_aliases = {
         "answer_pass": "answer_valid",

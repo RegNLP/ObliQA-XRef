@@ -11,10 +11,10 @@ python -m obliqaxref.eval.cli --help
 ## Commands
 
 ```bash
-# Finalize dependency-valid (judge PASS) benchmark splits
+# Finalize dependency-valid (judge PASS) benchmark splits; use --curate-suffix for pilots
 python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid
 
-# Retrieval evaluation with pair-level diagnostics
+# Retrieval evaluation with pair-level diagnostics (no restaging by default)
 python -m obliqaxref.eval.cli ir --corpus both --k 10
 
 # Answer generation and evaluation
@@ -59,3 +59,4 @@ Outputs:
 - `benchmark_statistics_latex_tables.tex`
 
 Finalized records include ObliQA-family metadata fields. Older records are upgraded with defaults during export or statistics loading.
+For citation-dependent QA, prefer pair-aware diagnostics (Both@K, SRC-only@K, TGT-only@K, Neither@K, PairMRR). Recall@K alone is insufficient.

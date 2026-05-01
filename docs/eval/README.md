@@ -38,6 +38,35 @@ ObliQA-XRef_Out_Datasets/
 
 Older cohort aliases are accepted, but current policy distinguishes `dependency_valid`, `answer_valid`, and `answer_failed`.
 
+### Finalize from pilot curation outputs
+
+Use `--curate-suffix` to select pilot outputs, and write to a clean root directory:
+
+```bash
+rm -rf ObliQA-XRef_Out_Datasets/pilot_hardenriched100_clean
+python -m obliqaxref.eval.cli finalize --corpus both --cohort dependency_valid \
+  --curate-suffix pilot_hardenriched100 \
+  --output-dir ObliQA-XRef_Out_Datasets/pilot_hardenriched100_clean
+```
+
+## IR evaluation (diagnostic only)
+
+IR evaluation reads staged `.trec` files under the finalized root. By default, the IR CLI does not restage if `.trec` files exist, to preserve pilot-staged runs. Use `--stage-runs` only when you explicitly need to restage.
+
+```bash
+python -m obliqaxref.eval.cli ir \
+  --corpus both \
+  --root ObliQA-XRef_Out_Datasets/pilot_hardenriched100_clean \
+  --methods bm25 ft_e5 rrf_bm25_e5 ce_rerank_union200 bm25_xref_expand e5_xref_expand rrf_xref_expand
+```
+
+Key metrics:
+- Both@5/10/20 (pair co-retrieval)
+- SRC-only@K, TGT-only@K, Neither@K
+- PairMRR
+
+Recall@K alone is insufficient for citation-dependent QA, since retrieving only one passage does not establish co-evidence.
+
 ## Retrieval Evaluation
 
 Supported runs:

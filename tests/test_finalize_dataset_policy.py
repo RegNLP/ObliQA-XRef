@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from obliqaxref.eval.FinalizeDataset.finalize_dataset import finalize_dataset_main
+from obliqaxref.eval import cli as eval_cli
 
 
 def _writelines(path: Path, rows: list[dict]):
@@ -126,3 +127,89 @@ def test_finalize_fallback_ignores_stale_keep_file(tmp_path, monkeypatch):
 
     records = _read_jsonl(tmp_path / "out" / "ObliQA-XRef-ADGM-ALL.jsonl")
     assert [record["item_id"] for record in records] == ["q_pass"]
+
+
+def test_finalize_from_curate_suffix(tmp_path: Path, monkeypatch):
+    # Write curated outputs under an out_<suffix> directory
+    curate_out = tmp_path / "runs" / "curate_adgm" / "out_pilotX"
+    dep_rows = [
+        {"item_id": "SFX1", "question": "q1", "gold_answer": "a1", "source_passage_id": "s1", "target_passage_id": "t1"},
+        {"item_id": "SFX2", "question": "q2", "gold_answer": "a2", "source_passage_id": "s2", "target_passage_id": "t2"},
+    ]
+    (curate_out).mkdir(parents=True, exist_ok=True)
+    with (curate_out / "final_dependency_valid.jsonl").open("w", encoding="utf-8") as f:
+        for r in dep_rows:
+            import json as _json
+            f.write(_json.dumps(r) + "\n")
+
+    out_dir = tmp_path / "datasets"
+    cwd = Path.cwd()
+    try:
+        monkeypatch.chdir(tmp_path)
+        # Read from out_<suffix> via curate_suffix
+        finalize_dataset_main(
+            out_dir=str(out_dir), corpus="adgm", cohort="dependency_valid", seed=1, curate_suffix="pilotX"
+        )
+    finally:
+        monkeypatch.chdir(cwd)
+
+    full = out_dir / "ObliQA-XRef-ADGM-ALL.jsonl"
+    assert full.exists()
+    lines = full.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 2
+
+
+def test_stage_ir_runs_from_suffix_and_canonical_names(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    corpus = "adgm"
+    gen_out = tmp_path / f"runs/generate_{corpus}/out_pilotX"
+    gen_out.mkdir(parents=True, exist_ok=True)
+    # Create a subset of canonical runs
+    for name in [
+        "bm25.trec",
+        "ft_e5.trec",
+        "rrf_bm25_e5.trec",
+        "bm25_xref_expand.trec",
+        "e5_xref_expand.trec",
+        "rrf_xref_expand.trec",
+        "ce_rerank_union200.trec",
+    ]:
+        (gen_out / name).write_text(f"{name} \n", encoding="utf-8")
+
+    out_root = tmp_path / "ObliQA-XRef_Out_Datasets" / "pilotX"
+    staged_dir = eval_cli._stage_dataset_layout(corpus, out_root, curate_suffix="pilotX")
+
+    # Canonical files should exist
+    for name in [
+        "bm25.trec",
+        "ft_e5.trec",
+        "rrf_bm25_e5.trec",
+        "bm25_xref_expand.trec",
+        "e5_xref_expand.trec",
+        "rrf_xref_expand.trec",
+        "ce_rerank_union200.trec",
+    ]:
+        assert (staged_dir / name).exists(), f"missing {name}"
+
+    # Aliases should also exist
+    assert (staged_dir / "e5.trec").exists()
+    assert (staged_dir / "rrf.trec").exists()
+
+
+def test_finalize_staging_overwrites_stale_trecs(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    corpus = "ukfin"
+    gen_out = tmp_path / f"runs/generate_{corpus}/out_pilotY"
+    gen_out.mkdir(parents=True, exist_ok=True)
+    # Create a canonical file with known content in the source
+    (gen_out / "bm25.trec").write_text("SOURCESRC\n", encoding="utf-8")
+
+    out_root = tmp_path / "ObliQA-XRef_Out_Datasets" / "pilotY"
+    staged_dir = out_root / f"ObliQA-XRef-{corpus.upper()}-ALL"
+    staged_dir.mkdir(parents=True, exist_ok=True)
+    # Write a stale .trec that should be removed/overwritten
+    (staged_dir / "bm25.trec").write_text("STALE\n", encoding="utf-8")
+
+    eval_cli._stage_dataset_layout(corpus, out_root, curate_suffix="pilotY")
+    content = (staged_dir / "bm25.trec").read_text(encoding="utf-8")
+    assert "SOURCESRC" in content and "STALE" not in content
