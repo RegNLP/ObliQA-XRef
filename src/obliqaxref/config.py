@@ -225,7 +225,7 @@ class SamplingConfig(BaseModel):
     )
 
     def model_post_init(self, __context: Any) -> None:
-        _valid = {"random", "low_overlap", "multi_ref_source", "target_definition_or_condition", "mixed_difficulty"}
+        _valid = {"random", "low_overlap", "multi_ref_source", "target_definition_or_condition", "mixed_difficulty", "hard_enriched"}
         if self.sampling_mode not in _valid:
             raise ValueError(
                 f"sampling_mode must be one of {sorted(_valid)!r}, got {self.sampling_mode!r}"

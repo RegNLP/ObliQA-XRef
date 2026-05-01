@@ -95,6 +95,7 @@ VALID_MODES: frozenset[str] = frozenset({
     "multi_ref_source",
     "target_definition_or_condition",
     "mixed_difficulty",
+    "hard_enriched",
 })
 
 DEFAULT_BUCKET_WEIGHTS: dict[str, float] = {
@@ -382,6 +383,94 @@ def _sample_mixed_difficulty(
     return selected, bucket_counts
 
 
+def _hard_enriched_score(row: dict[str, Any]) -> float:
+    """Deterministic hardness score using only pre-generation features.
+
+    Higher is harder. Prefers:
+    - lower source-target lexical overlap
+    - different documents (when available)
+    - moderately longer passages (avg of src/tgt lengths)
+    """
+    jac = float(row.get("source_target_jaccard_similarity", 1.0))
+    src_len = int(row.get("source_length_words", 0))
+    tgt_len = int(row.get("target_length_words", 0))
+    avg_len = (src_len + tgt_len) / 2.0
+
+    # Normalize lengths into [0,1] with soft clipping
+    # Encourage non-title passages by rewarding longer targets on average
+    # 0 at <= 20 words, 1 at >= 300 words
+    def _norm_len(x: float) -> float:
+        if x <= 20:
+            return 0.0
+        if x >= 300:
+            return 1.0
+        return (x - 20.0) / 280.0
+
+    len_norm = _norm_len(avg_len)
+
+    # Different-document bonus if doc IDs exist and differ
+    src_doc = str(row.get("SourceDocumentID") or "").strip()
+    tgt_doc = str(row.get("TargetDocumentID") or "").strip()
+    doc_diff = 1.0 if (src_doc and tgt_doc and src_doc != tgt_doc) else 0.0
+
+    # Combine: emphasize low overlap, then length, then doc diversity
+    score = 0.6 * (1.0 - max(0.0, min(1.0, jac))) + 0.25 * len_norm + 0.15 * doc_diff
+    return float(round(score, 6))
+
+
+def _sample_hard_enriched(
+    rows: list[dict[str, Any]], n: int, seed: int
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    # Score all rows
+    scored = []
+    for r in rows:
+        s = _hard_enriched_score(r)
+        # non-destructive: copy row with score for downstream report/debug
+        r2 = dict(r)
+        r2["hard_enriched_score"] = s
+        scored.append(r2)
+
+    # Sort by score descending (hardest first); break ties deterministically by IDs
+    def _tiebreak_key(x: dict[str, Any]):
+        return (
+            -x.get("hard_enriched_score", 0.0),
+            str(x.get("SourceID") or ""),
+            str(x.get("TargetID") or ""),
+        )
+
+    scored.sort(key=_tiebreak_key)
+
+    # Greedy diversity: prefer new source/target documents first
+    rng = _random_module.Random(seed)
+    selected: list[dict[str, Any]] = []
+    seen_src_docs: set[str] = set()
+    seen_tgt_docs: set[str] = set()
+
+    # First pass: take items that expand source/target doc coverage
+    for r in scored:
+        if len(selected) >= n:
+            break
+        sdoc = str(r.get("SourceDocumentID") or "")
+        tdoc = str(r.get("TargetDocumentID") or "")
+        if (sdoc and sdoc not in seen_src_docs) or (tdoc and tdoc not in seen_tgt_docs):
+            selected.append(r)
+            if sdoc:
+                seen_src_docs.add(sdoc)
+            if tdoc:
+                seen_tgt_docs.add(tdoc)
+
+    # Second pass: fill remaining quota from the top-ranked remainder
+    if len(selected) < n:
+        remaining = [r for r in scored if r not in selected]
+        fill = remaining[: (n - len(selected))]
+        selected.extend(fill)
+
+    # Deterministic shuffle to avoid positional bias in downstream
+    rng.shuffle(selected)
+
+    return selected, {"hard_enriched": len(selected)}
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -462,6 +551,8 @@ def sample_xref_rows(
             filter_keys=("target_contains_definition_like_text", "target_contains_exception_or_condition"),
             label="target_definition_or_condition",
         )
+    elif mode == "hard_enriched":
+        sampled, bucket_counts = _sample_hard_enriched(enriched, n, seed)
     else:  # mixed_difficulty
         weights = mixed_difficulty_bucket_weights or DEFAULT_BUCKET_WEIGHTS
         sampled, bucket_counts = _sample_mixed_difficulty(enriched, n, seed, weights)
