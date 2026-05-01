@@ -215,3 +215,11 @@ __marimo__/
 **/.DS_Store
 # Heavy IR cache artifacts (not intended for git)
 runs/**/work/ir_cache/*.pkl
+
+# Local experiment outputs and pilot artifacts
+runs/
+ObliQA-XRef_Out_Datasets/
+
+# One-off local run scripts
+run_overnight_pilot.sh
+run_hardenriched_pilot.sh
