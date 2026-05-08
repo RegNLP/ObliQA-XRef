@@ -1,0 +1,130 @@
+Prompt file used: prompts/general_grounded_prompt.txt
+prompt_version: controlled_bm25_gpt52_general_grounded_v1
+QuestionID: 09ed83603d5c9d13
+number_of_retrieved_passages: 10
+first_3_RetrievedPassageIDs: ["6ebadf70-c332-487e-ac96-759bdd2eacc8", "b249219a-57ec-4b15-be46-58475357c6c1", "5aa332b8-acaa-492f-8e3e-ce87d73337c8"]
+
+FULL RENDERED PROMPT
+====================
+System:
+You are a helpful regulatory compliance assistant.
+
+User:
+You are given a compliance question and a set of retrieved regulatory passages. Generate a grounded answer using only the retrieved passages.
+
+Grounding rules:
+- Use only the information explicitly supported by the retrieved passages.
+- Do not use outside knowledge.
+- Do not use gold answers, reference answers, labels, or hidden evaluation metadata.
+- Every substantive claim must be grounded in one or more retrieved passages.
+- Include passage-level grounding tags in the answer using this exact format: [PID:PASSAGE_ID]
+- Use only passage IDs that appear in the retrieved passages.
+- Do not cite passages that were not used.
+- Do not cite every passage automatically.
+- Each sentence should normally have at most one grounding tag, unless the sentence genuinely synthesizes multiple passages.
+- If the retrieved passages are insufficient, say exactly: "I cannot answer based on the provided passages."
+- If the retrieved passages are insufficient, include no unsupported claims.
+
+Answer style:
+- Write a concise professional regulatory answer.
+- Paraphrase accurately instead of quoting long passages verbatim.
+- Keep the answer focused on what is supported by the retrieved passages.
+- The answer field may contain [PID:...] grounding tags for auditability.
+
+Question:
+"""When preparing its Summary of Reserves and Resources, must a Petroleum Reporting Entity include the specified table in the prescribed form and within the stated timing window, and does that obligation apply if the Petroleum Reporting Entity is required to file SEC compliant Forms 10-K and 20-F Reports annually with the SEC?"""
+
+Retrieved passages:
+Passage 1
+Passage ID: 6ebadf70-c332-487e-ac96-759bdd2eacc8
+Text: ANNUAL DISCLOSURES
+Summary of Reserves and Resources
+The US Securities Exchange Act of 1934 requires certain companies to file Forms 10-K and 20-F with the SEC.  A Petroleum Reporting Entity that is required to file such forms with the SEC annually is not required, pursuant to Rule 12.14.2, to disclose a Summary of Reserves and Resources as otherwise set out in Rule 12.14.1.  The FSRA may require a Petroleum Reporting Entity to disclose the filed SEC Forms 10-K and 20-F, if these relevant forms have otherwise not been disclosed to the market.
+
+Passage 2
+Passage ID: b249219a-57ec-4b15-be46-58475357c6c1
+Text: A Petroleum Reporting Entity that is required to file SEC compliant Forms 10-K and 20-F Reports annually with the SEC is not required to comply with Rule 12.14.1.
+
+Passage 3
+Passage ID: 5aa332b8-acaa-492f-8e3e-ce87d73337c8
+Text: Quarterly Reports – Petroleum Production Reporting Entities. A Petroleum Production Reporting Entity must disclose a report for each quarter of its financial year containing the following information in respect of the Petroleum Production Reporting Entity and all controlled entities, on a consolidated basis, if applicable:
+(1)	details of the activities relating to Petroleum production and development, or a statement that there have been no activities relating to Petroleum production and development;
+(2)	a summary of any expenditure incurred relating to Petroleum production and development activities;
+(3)	a summary of:
+(a)	the activities relating to Petroleum Exploration, or a statement that there have been no activities relating to Petroleum Exploration; and
+(b)	any expenditure incurred relating to Petroleum Exploration activities
+(4)	at least once every 12 months, the Summary of Reserves and Resources required by Rule 12.14.1 unless it is included in the Petroleum Production Reporting Entity’s annual report; and
+(5)	when the previous, and upcoming, disclosure required by Rule 12.13.3(4) was, and will be, disclosed.
+
+Passage 4
+Passage ID: ad8a5773-94df-47c7-9bf6-b826157792af
+Text: ANNUAL DISCLOSURES
+Summary of Reserves and Resources
+Flexibility is provided to a Petroleum Reporting Entity as to when the Summary of Reserves and Resources is to be disclosed.  Rather than requiring the Summary of Reserves and Resources to always be disclosed by a Petroleum Reporting Entity in its annual financial report, a Petroleum Reporting Entity has the flexibility (provided by Rules 12.13.1(5) and 12.13.3(4)) to disclose the Summary of Reserves and Resources within either its annual financial report or as part of its quarterly activities report.
+
+Passage 5
+Passage ID: ab93bfec-289e-42d2-b653-975f44d08c62
+Text: Quarterly Reports – Petroleum Exploration Reporting Entities. A Petroleum Exploration Reporting Entity must disclose a report for each quarter of its financial year containing the following information in respect of the Petroleum Exploration Reporting Entity and all controlled entities, on a consolidated basis, if applicable:
+(1)	details of the activities relating to Petroleum:
+(a)	Exploration, or a statement that there have been no activities relating to Exploration; and
+(b)	production and development, or a statement that there have been no activities relating to mining production and development;
+(2)	a summary of any expenditure incurred relating to Petroleum:
+(a)	Exploration activities; and
+(b)	production and development;
+(3)	the Petroleum Tenements held at the end of the quarter, their location and the percentage interest held, including the beneficial interests in farm-in or farm-out agreements;
+(4)	the Petroleum Tenements, including beneficial interests in farm-in or farm-out agreements, acquired or disposed of during the quarter, and their location;
+(5)	at least once every 12 months, the Summary of Reserves and Resources required by Rule 12.14.1 unless it is included in the Petroleum Exploration Reporting Entity’s annual report; and
+(6)	when the previous, and upcoming, disclosure required by (5) was, and is, to be disclosed.
+
+Passage 6
+Passage ID: 6fbc9fb3-4bde-4940-8d44-1080fc72e417
+Text: MKT FORM 12-1 – Summary of Reserves and Resources. The geographical areas by which a Petroleum Reporting Entity chooses to disclose its aggregated Petroleum Reserves within MKT Form 12-1 is a matter for the Petroleum Reporting Entity to determine, having regard to its individual circumstances and the materiality of the Petroleum Reserves in question.  Petroleum Reporting Entities can choose to report by continent, by country, by state or by other distinct geographical area.  Petroleum Reporting Entities may also choose to disclose estimates of Petroleum Reserves for a particular basin (if material), with a mix of other geographical areas.
+
+Passage 7
+Passage ID: cd137cde-9ef8-4ed1-a401-6bf47f8ccb04
+Text: Subject to Rule 12.14.3, a Petroleum Reporting Entity must include in its Summary of Reserves and Resources a table in the form of MKT Form 12-1, as of a date no earlier than one month prior to the disclosure of the Summary of Reserves and Resources.
+
+Passage 8
+Passage ID: 96474420-a00b-4c08-8cfc-4d2e6ed6dd03
+Text: MKT FORM 12-1 – Summary of Reserves and Resources. The use of the table format within MKT Form 12-1 is intended to provide Petroleum Reporting Entities with flexibility in the way it discloses the Summary of Reserves and Resources, as well as ensuring consistency of reporting under the Rules.  In Guidance set out in Rule 12.2.1, the FSRA sets out its expectation that to ensure consistency of its disclosures, Petroleum Reporting Entities should be mindful of the table format for the disclosure of Petroleum Resources as set out in MKT Form 12-1.
+
+Passage 9
+Passage ID: b4e732e7-4ecb-43a7-8722-365beb4f49ab
+Text: A Petroleum Reporting Entity disclosing estimates of Petroleum Reserves that are material and that have not previously been disclosed by the Petroleum Reporting Entity must ensure the disclosure contains:
+(1)	in relation to the assumptions used to calculate the estimates of Petroleum Reserves:
+(a)	all material economic assumptions utilised; or
+(b)	if the Petroleum Reporting Entity considers the material economic assumptions to be commercially sensitive, a statement to that effect and an explanation of the methodology used to determine the material economic assumptions;
+Guidance
+A Petroleum Reporting Entity that considers certain information relating to the material economic assumptions to be commercially sensitive should refer to paragraphs 66-74 of the Guidance on Petroleum Disclosures and paragraphs 127 and 128 of the Guidance on Continuous Disclosure.
+(2)	details of whether the Petroleum Reporting Entity has operator or non-operator interests, and if applicable, the name of the operator;
+(3)	a description:
+(a)	the basis for confirming commercial producibility;
+(b)	the method of estimation;
+(c)	the proposed Extraction method/parameters;
+(d)	any specialised processing required following Extraction; and
+(e)	any other modifying factors or information that would reasonably be required to allow investors to make informed decisions on the validity of the Petroleum Reserves;
+(4)	if the estimate of Petroleum Reserves relate to Developed Petroleum Reserves, the estimated quantities (in aggregate) to be recovered from existing wells and facilities;
+(5)	if the estimate of Petroleum Reserves relate to Undeveloped Petroleum Reserves, details of the:
+(a)	status of the relevant project, including any environmental approvals required;
+(b)	estimated quantities (in aggregate) to be recovered through future investment;
+(c)	date anticipated for development of the well(s);
+(d)	marketing, and investment, arrangements that justify development; and
+(e)	requirements for access to transportation infrastructure, if applicable.
+(6)	if the estimates of Petroleum Reserves relate to Unconventional Petroleum Resources, the
+(a)	type(s) of Unconventional Petroleum Resource;
+(b)	land area;
+(c)	number of wells; and
+(d)	specialised extraction technology proposed, if applicable, to be utilised.
+Guidance
+The Petroleum Reporting Standard defines ‘Unconventional Resources’ in section 2.4 and its Appendix A. Sections 1.1 and 8.6 of the PRMS Guidelines provide additional guidance on Unconventional Petroleum Resources.
+(7)	if 1P is zero for the estimates of Petroleum Resources, details of why 1P is zero and why, in the absence of 1P, 3P and 2P have been disclosed;
+
+Passage 10
+Passage ID: 9790d1a0-0157-46b6-b26a-7d4f20c6af56
+Text: MKT FORM 12-1 – Summary of Reserves and Resources. Rule 12.14.1 requires a Petroleum Reporting Entity to include, in its Summary of Reserves and Resources (see paragraphs 85–88 above), a table set out in the form of MKT Form 12-1.  The information contained in MKT Form 12-1 must be current as of the date no earlier than one month prior to the disclosure of MKT Form 12-1.
+
+Return strict JSON only:
+{
+  "answer": "...",
+  "used_passage_ids": ["..."]
+}

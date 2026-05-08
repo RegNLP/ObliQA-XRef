@@ -1,0 +1,206 @@
+{
+  "shared_corpus": {
+    "path": "runs/adapter_adgm/processed/passage_corpus.jsonl",
+    "count": 13015,
+    "field_names_sampled": [
+      "anchor_ids",
+      "doc_id",
+      "doc_url",
+      "eId",
+      "heading_path",
+      "passage",
+      "passage_id",
+      "passage_uid",
+      "passage_url",
+      "refs",
+      "source_tag",
+      "tag",
+      "title"
+    ],
+    "example_record": {
+      "passage_uid": "89ef0722-5caf-421a-b653-b5e818d78abe",
+      "passage": "INTRODUCTION",
+      "doc_id": "adgm_doc_3",
+      "passage_id": "1",
+      "source_tag": "adgm_rules",
+      "title": null,
+      "heading_path": [],
+      "passage_url": null,
+      "doc_url": null,
+      "eId": null,
+      "tag": null,
+      "anchor_ids": [],
+      "refs": []
+    },
+    "retrieval_docid_field": "passage_uid",
+    "retrieval_text_field": "passage",
+    "retrieval_doc_field": "doc_id"
+  },
+  "obliqa": {
+    "test_size": 2786,
+    "question_field": "Question",
+    "qid_field": "QuestionID",
+    "passages_fields_seen": [
+      "DocumentID",
+      "Passage",
+      "PassageID"
+    ],
+    "qrel_passages_total": 3666,
+    "mapped_to_shared_corpus": 3666,
+    "mapping_rate": 1.0,
+    "mapping_methods": {
+      "passageid_unique": 1839,
+      "passageid_ambig_text": 1827
+    },
+    "mapped_examples": [
+      {
+        "QuestionID": "777e7a14-fea3-4c37-a0e6-9ffb50024d5c",
+        "DocumentID": "1",
+        "PassageID": "14.2.3.Guidance.10.",
+        "mapped_uid": "cbe01c7d-746e-4822-a789-e69e97077ff9",
+        "strategy": "passageid_unique"
+      },
+      {
+        "QuestionID": "0eb99ea8-3810-492c-9986-7739006b5708",
+        "DocumentID": "19",
+        "PassageID": "100)",
+        "mapped_uid": "a68ef617-b163-41b0-9d5f-12ff26eb407f",
+        "strategy": "passageid_ambig_text"
+      },
+      {
+        "QuestionID": "d34e3516-f053-4652-a0ac-ede703144b9a",
+        "DocumentID": "3",
+        "PassageID": "20.14.1.(2)",
+        "mapped_uid": "335cd3af-2e26-47e1-85b2-02ab5c7293c5",
+        "strategy": "passageid_unique"
+      },
+      {
+        "QuestionID": "6d876d32-7557-4149-875e-8c66f13f3485",
+        "DocumentID": "13",
+        "PassageID": "4.15.16",
+        "mapped_uid": "50586097-115d-49d1-9dd6-462b2d08e3f3",
+        "strategy": "passageid_unique"
+      },
+      {
+        "QuestionID": "2efd28f4-8677-4f05-82cd-d9989fb72409",
+        "DocumentID": "34",
+        "PassageID": "35)",
+        "mapped_uid": "b99a9d8c-da98-4030-9bad-3a917ea0d5bd",
+        "strategy": "passageid_ambig_text"
+      },
+      {
+        "QuestionID": "84a753ca-2a42-4909-bf85-e4d5654cc605",
+        "DocumentID": "3",
+        "PassageID": "14.4.6.Guidance.4.",
+        "mapped_uid": "c2a59533-78bc-4179-9d00-944f883d022e",
+        "strategy": "passageid_unique"
+      },
+      {
+        "QuestionID": "cfbe9040-6a57-4146-85f8-3d082b435bec",
+        "DocumentID": "37",
+        "PassageID": "4.5.b.",
+        "mapped_uid": "1f61f06e-ae27-472b-afc5-3f5fdb40207f",
+        "strategy": "passageid_unique"
+      },
+      {
+        "QuestionID": "ca5c0779-8178-4e43-bdd3-fe171c573c0f",
+        "DocumentID": "19",
+        "PassageID": "186)",
+        "mapped_uid": "198129d5-575b-4b6d-9e95-e845bc96e3bb",
+        "strategy": "passageid_ambig_text"
+      }
+    ],
+    "unmapped_examples": []
+  },
+  "obliqa_mp": {
+    "test_size": 447,
+    "question_field": "Question",
+    "qid_field": "QuestionID",
+    "passages_fields_seen": [
+      "DocumentID",
+      "ID",
+      "Passage",
+      "PassageID"
+    ],
+    "qrel_passages_total": 1061,
+    "mapped_to_shared_corpus": 1061,
+    "mapping_rate": 1.0,
+    "mapping_methods": {
+      "direct:ID": 1061
+    },
+    "mapped_examples": [
+      {
+        "QuestionID": "8d958b26-0680-420d-a4ab-b3976d0f387e",
+        "ID": "b5188d13-9212-4d7b-81c1-ebd52fc7693d",
+        "DocumentID": "13",
+        "PassageID": "APP11.A11.2.Guidance.9",
+        "mapped_uid": "b5188d13-9212-4d7b-81c1-ebd52fc7693d",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "8d958b26-0680-420d-a4ab-b3976d0f387e",
+        "ID": "21f8ff51-bf80-49f4-b2af-c22f797172f8",
+        "DocumentID": "10",
+        "PassageID": "4.7.14",
+        "mapped_uid": "21f8ff51-bf80-49f4-b2af-c22f797172f8",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "82f9372e-26b3-4403-a5d2-4fbdafad9e95",
+        "ID": "336a0b3d-b2c6-412d-9e79-3a0c6e2bfd6d",
+        "DocumentID": "40",
+        "PassageID": "SECTION V.C.1",
+        "mapped_uid": "336a0b3d-b2c6-412d-9e79-3a0c6e2bfd6d",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "82f9372e-26b3-4403-a5d2-4fbdafad9e95",
+        "ID": "efb92242-fdd6-4727-b5d7-b570b79c08c7",
+        "DocumentID": "40",
+        "PassageID": "SECTION VI.A.1",
+        "mapped_uid": "efb92242-fdd6-4727-b5d7-b570b79c08c7",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "14e50df2-bf3e-442b-b85e-6343b505baec",
+        "ID": "229c2ae3-bdd9-4022-8172-d9ccd12d0916",
+        "DocumentID": "13",
+        "PassageID": "APP4.A4.1.Guidance.14",
+        "mapped_uid": "229c2ae3-bdd9-4022-8172-d9ccd12d0916",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "14e50df2-bf3e-442b-b85e-6343b505baec",
+        "ID": "06db1547-7a3a-4b33-a8c7-47122d70a7fd",
+        "DocumentID": "13",
+        "PassageID": "APP4.A4.1.Guidance.21",
+        "mapped_uid": "06db1547-7a3a-4b33-a8c7-47122d70a7fd",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "448cdd65-02fa-4972-a37a-9acec1439530",
+        "ID": "b5d36396-57ff-473e-8ff9-0e392516e731",
+        "DocumentID": "34",
+        "PassageID": "92)",
+        "mapped_uid": "b5d36396-57ff-473e-8ff9-0e392516e731",
+        "strategy": "direct:ID"
+      },
+      {
+        "QuestionID": "448cdd65-02fa-4972-a37a-9acec1439530",
+        "ID": "ba61ec12-405a-490c-998e-9b9c6c6c5797",
+        "DocumentID": "34",
+        "PassageID": "93)",
+        "mapped_uid": "ba61ec12-405a-490c-998e-9b9c6c6c5797",
+        "strategy": "direct:ID"
+      }
+    ],
+    "unmapped_examples": []
+  },
+  "xref_adgm": {
+    "test_size": 502,
+    "qrels_total": 1004,
+    "mapped_qrels": 1004,
+    "mapping_rate": 1.0,
+    "unmapped_examples": []
+  }
+}

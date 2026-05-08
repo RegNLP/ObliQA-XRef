@@ -1,0 +1,74 @@
+[
+  {
+    "dataset": "obliqa",
+    "prompt_condition": "general",
+    "sample_size": 5,
+    "mean_entailment_score": 0.373954,
+    "mean_contradiction_score": 0.440644,
+    "mean_obligation_coverage_score": 0.043333333333333335,
+    "mean_composite_score": 0.325548,
+    "runtime_seconds": 120.0,
+    "skipped_or_failed_rows": 0,
+    "output_path": "repass_outputs/pilot_general_obliqa_bm25_gpt52"
+  },
+  {
+    "dataset": "obliqa_mp",
+    "prompt_condition": "general",
+    "sample_size": 5,
+    "mean_entailment_score": 0.6594,
+    "mean_contradiction_score": 0.07318,
+    "mean_obligation_coverage_score": 0.10913424866514113,
+    "mean_composite_score": 0.565116,
+    "runtime_seconds": 115.0,
+    "skipped_or_failed_rows": 0,
+    "output_path": "repass_outputs/pilot_general_obliqa_mp_bm25_gpt52"
+  },
+  {
+    "dataset": "xref_adgm",
+    "prompt_condition": "general",
+    "sample_size": 5,
+    "mean_entailment_score": 0.524276,
+    "mean_contradiction_score": 0.537818,
+    "mean_obligation_coverage_score": 0.09938629997453527,
+    "mean_composite_score": 0.36194800000000005,
+    "runtime_seconds": 175.0,
+    "skipped_or_failed_rows": 0,
+    "output_path": "repass_outputs/pilot_general_xref_adgm_bm25_gpt52"
+  },
+  {
+    "dataset": "obliqa",
+    "prompt_condition": "task_aware",
+    "sample_size": 5,
+    "mean_entailment_score": 0.5902700000000001,
+    "mean_contradiction_score": 0.435358,
+    "mean_obligation_coverage_score": 0.07818181818181819,
+    "mean_composite_score": 0.41103199999999995,
+    "runtime_seconds": 143.0,
+    "skipped_or_failed_rows": 0,
+    "output_path": "repass_outputs/pilot_task_obliqa_bm25_gpt52"
+  },
+  {
+    "dataset": "obliqa_mp",
+    "prompt_condition": "task_aware",
+    "sample_size": 5,
+    "mean_entailment_score": 0.7032619999999999,
+    "mean_contradiction_score": 0.019744,
+    "mean_obligation_coverage_score": 0.09730358504958048,
+    "mean_composite_score": 0.5936060000000001,
+    "runtime_seconds": 106.0,
+    "skipped_or_failed_rows": 0,
+    "output_path": "repass_outputs/pilot_task_obliqa_mp_bm25_gpt52"
+  },
+  {
+    "dataset": "xref_adgm",
+    "prompt_condition": "task_aware",
+    "sample_size": 5,
+    "mean_entailment_score": 0.66472,
+    "mean_contradiction_score": 0.428762,
+    "mean_obligation_coverage_score": 0.1276776165011459,
+    "mean_composite_score": 0.454544,
+    "runtime_seconds": 220.0,
+    "skipped_or_failed_rows": 0,
+    "output_path": "repass_outputs/pilot_task_xref_adgm_bm25_gpt52"
+  }
+]

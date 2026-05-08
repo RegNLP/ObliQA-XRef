@@ -1,0 +1,8 @@
+| dataset | prompt_condition | sample_size | mean_entailment_score | mean_contradiction_score | mean_obligation_coverage_score | mean_composite_score | runtime_seconds | skipped_or_failed_rows | output_path |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| obliqa | general | 300 | 0.506954 | 0.453694 | 0.078187 | 0.377149 | 5612.353831 | 0 | /Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/batch_runs/sample_300/repass_outputs/sample300_general_obliqa_bm25_gpt52 |
+| obliqa_mp | general | 300 | 0.580596 | 0.311521 | 0.113993 | 0.461023 | 7541.852254 | 0 | /Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/batch_runs/sample_300/repass_outputs/sample300_general_obliqa_mp_bm25_gpt52 |
+| xref_adgm | general | 300 | 0.612947 | 0.488387 | 0.108725 | 0.411095 | 5432.194714 | 0 | /Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/batch_runs/sample_300/repass_outputs/sample300_general_xref_adgm_bm25_gpt52 |
+| obliqa | task_aware | 300 | 0.488182 | 0.477158 | 0.081379 | 0.364134 | 5522.206913 | 0 | /Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/batch_runs/sample_300/repass_outputs/sample300_task_obliqa_bm25_gpt52 |
+| obliqa_mp | task_aware | 300 | 0.574388 | 0.299440 | 0.122316 | 0.465755 | 7331.357257 | 0 | /Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/batch_runs/sample_300/repass_outputs/sample300_task_obliqa_mp_bm25_gpt52 |
+| xref_adgm | task_aware | 300 | 0.575134 | 0.482055 | 0.116858 | 0.403312 | 5551.861946 | 0 | /Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/batch_runs/sample_300/repass_outputs/sample300_task_xref_adgm_bm25_gpt52 |

@@ -162,6 +162,12 @@ python -m obliqaxref.eval.cli answer-eval --corpus both
 
 See [docs/eval/README.md](docs/eval/README.md).
 
+## Controlled Comparison Experiments
+
+The paper-facing controlled comparison over ObliQA, ObliQA-MP, and ObliQA-XRef-ADGM is documented in [controlled_comparison_pilot/README.md](controlled_comparison_pilot/README.md).
+
+That directory contains the shared-corpus controlled BM25 setup, full IR tables, GPT-5.2 grounded answer-generation pipeline, RePASs export/evaluation pipeline, sample-300 batch outputs, repair logs, and paired general-vs-task-aware prompt delta analysis.
+
 ## Sampling Regimes
 
 Two pre-generation sampling regimes are supported:

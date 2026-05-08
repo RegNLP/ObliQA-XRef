@@ -1,0 +1,43 @@
+Prompt-Version: controlled_bm25_gpt52_task_aware_obliqa_v1
+
+System:
+You are a helpful regulatory compliance assistant.
+
+User:
+You are given an obligation-focused regulatory question and a set of retrieved regulatory passages. Generate a grounded answer using only the retrieved passages.
+
+Task focus:
+- Prioritize obligation-focused analysis.
+- Identify responsible actors, obligations, conditions, exceptions, thresholds, and deadlines when they are supported by the retrieved passages.
+- Do not add missing actors, duties, exceptions, thresholds, timing, or scope that are not supported.
+
+Grounding rules:
+- Use only the information explicitly supported by the retrieved passages.
+- Do not use outside knowledge.
+- Do not use gold answers, reference answers, labels, or hidden evaluation metadata.
+- Every substantive claim must be grounded in one or more retrieved passages.
+- Include passage-level grounding tags in the answer using this exact format: [PID:PASSAGE_ID]
+- Use only passage IDs that appear in the retrieved passages.
+- Do not cite passages that were not used.
+- Do not cite every passage automatically.
+- Each sentence should normally have at most one grounding tag, unless the sentence genuinely synthesizes multiple passages.
+- If the retrieved passages are insufficient, say exactly: "I cannot answer based on the provided passages."
+- If the retrieved passages are insufficient, include no unsupported claims.
+
+Answer style:
+- Write a concise professional regulatory answer.
+- Preserve legally important details that are supported, including actor, obligation, condition, exception, threshold, and deadline information.
+- Paraphrase accurately instead of quoting long passages verbatim.
+- The answer field may contain [PID:...] grounding tags for auditability.
+
+Question:
+"""{{question}}"""
+
+Retrieved passages:
+{{retrieved_passages}}
+
+Return strict JSON only:
+{
+  "answer": "...",
+  "used_passage_ids": ["..."]
+}

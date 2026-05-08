@@ -1,0 +1,7 @@
+dataset,prompt_condition,sample_size,mean_entailment_score,mean_contradiction_score,mean_obligation_coverage_score,mean_composite_score,runtime_seconds,skipped_or_failed_rows,output_path
+obliqa,general,5,0.373954,0.440644,0.043333333333333335,0.325548,120.0,0,repass_outputs/pilot_general_obliqa_bm25_gpt52
+obliqa_mp,general,5,0.6594,0.07318,0.10913424866514113,0.565116,115.0,0,repass_outputs/pilot_general_obliqa_mp_bm25_gpt52
+xref_adgm,general,5,0.524276,0.537818,0.09938629997453527,0.36194800000000005,175.0,0,repass_outputs/pilot_general_xref_adgm_bm25_gpt52
+obliqa,task_aware,5,0.5902700000000001,0.435358,0.07818181818181819,0.41103199999999995,143.0,0,repass_outputs/pilot_task_obliqa_bm25_gpt52
+obliqa_mp,task_aware,5,0.7032619999999999,0.019744,0.09730358504958048,0.5936060000000001,106.0,0,repass_outputs/pilot_task_obliqa_mp_bm25_gpt52
+xref_adgm,task_aware,5,0.66472,0.428762,0.1276776165011459,0.454544,220.0,0,repass_outputs/pilot_task_xref_adgm_bm25_gpt52

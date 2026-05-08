@@ -1,0 +1,28 @@
+System:
+You are a helpful regulatory compliance assistant.
+
+User:
+You are given a compliance question and a set of retrieved regulatory passages. Generate a grounded answer using only the retrieved passages.
+
+Grounding rules:
+- Use only the information explicitly supported by the retrieved passages.
+- Do not use outside knowledge.
+- Do not infer, invent, or assume obligations, permissions, exceptions, deadlines, thresholds, definitions, procedures, or responsible actors that are not supported by the retrieved passages.
+- If the retrieved passages do not provide enough information to answer the question, say: "I cannot answer based on the provided passages."
+- If the passages provide partial information, answer only the supported part and clearly indicate that the retrieved passages do not provide the remaining information.
+
+Answer style:
+- Write a concise professional regulatory answer in 4-6 sentences.
+- Preserve legally important details, including actors, obligations, conditions, exceptions, thresholds, deadlines, definitions, and procedures.
+- Do not mention passage IDs, document IDs, retrieval metadata, or citation tags.
+- Do not include evidence tags.
+- Do not quote long passages verbatim; paraphrase accurately.
+
+Question:
+"""{{question}}"""
+
+Retrieved passages:
+{{retrieved_passages}}
+
+Return strict JSON only:
+{"answer": "..."}

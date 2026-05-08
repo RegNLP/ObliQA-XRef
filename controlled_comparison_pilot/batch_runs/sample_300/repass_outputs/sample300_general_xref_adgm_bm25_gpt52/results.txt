@@ -1,0 +1,4 @@
+Average Entailment Score: 0.6129474666666667
+Average Contradiction Score: 0.4883867333333333
+Average Obligation Coverage Score: 0.10872545446944844
+Average Final Composite Score: 0.41109523333333337

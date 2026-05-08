@@ -1,0 +1,4 @@
+dataset,split,sample_type,sample_size,retriever,k,Recall@10,MAP@10,nDCG@10,Hit@10,RelCount@10,Both@10,SRC-only@10,TGT-only@10,Neither@10,PairMRR,notes
+ObliQA,test,pilot_seed42_test5,5,bm25,10,0.540000,0.440000,0.516647,0.800000,1.000000,,,,,,
+ObliQA-MP,test,pilot_seed42_test5,5,bm25,10,0.533333,0.435714,0.570400,1.000000,1.200000,,,,,,
+ObliQA-XRef-ADGM,test,pilot_seed42_test5_2dpel_3schema,5,bm25,10,0.900000,0.635238,0.749631,1.000000,1.800000,0.800000,0.000000,0.200000,0.000000,0.235238,

@@ -1,0 +1,125 @@
+Prompt file used: prompts/general_grounded_prompt.txt
+prompt_version: controlled_bm25_gpt52_general_grounded_v1
+QuestionID: d6e4577b-8bd5-4979-b06c-1a4c71deff03
+number_of_retrieved_passages: 10
+first_3_RetrievedPassageIDs: ["33127e68-bce1-4ef1-a2b8-86217e654659", "c199c6e6-8864-4535-8044-6b468becb684", "2affa187-b3e3-4438-8d61-ccabc9f0c736"]
+
+FULL RENDERED PROMPT
+====================
+System:
+You are a helpful regulatory compliance assistant.
+
+User:
+You are given a compliance question and a set of retrieved regulatory passages. Generate a grounded answer using only the retrieved passages.
+
+Grounding rules:
+- Use only the information explicitly supported by the retrieved passages.
+- Do not use outside knowledge.
+- Do not use gold answers, reference answers, labels, or hidden evaluation metadata.
+- Every substantive claim must be grounded in one or more retrieved passages.
+- Include passage-level grounding tags in the answer using this exact format: [PID:PASSAGE_ID]
+- Use only passage IDs that appear in the retrieved passages.
+- Do not cite passages that were not used.
+- Do not cite every passage automatically.
+- Each sentence should normally have at most one grounding tag, unless the sentence genuinely synthesizes multiple passages.
+- If the retrieved passages are insufficient, say exactly: "I cannot answer based on the provided passages."
+- If the retrieved passages are insufficient, include no unsupported claims.
+
+Answer style:
+- Write a concise professional regulatory answer.
+- Paraphrase accurately instead of quoting long passages verbatim.
+- Keep the answer focused on what is supported by the retrieved passages.
+- The answer field may contain [PID:...] grounding tags for auditability.
+
+Question:
+"""What are the criteria for determining the amount of any supplementary fee that may be required by the Regulator, and how is the "reasonableness" of such estimates determined?"""
+
+Retrieved passages:
+Passage 1
+Passage ID: 33127e68-bce1-4ef1-a2b8-86217e654659
+Text: The amount of any supplementary fee will  reflect the Regulator’s reasonable estimate of the  additional time, effort and resources, including those of third parties, necessary to address an issue.  Matters which may cause the Regulator to require the payment of a supplementary fee could include, for example:
+a.	complex applications by reason of the Applicant's start-up profile, origin, ownership structure or proposed business model;
+b.	cases where it may be necessary to conduct intense supervisory scrutiny of an entity or individual from a risk perspective;
+c.	complex restructurings or changes in an Authorised Person’s or Recognised Body's structure or activities;
+d.	waiver or modification requests which are particularly complex or novel, in the opinion of the Regulator;
+e.	novel proposals and applications that cover untested ground or untested areas of the financial services regulatory regime; or
+f.	assessing complex business models, the supervision of which will require the Regulator to incur material additional expenses, such as, but not limited to, businesses which operate in, or rely upon activities performed in jurisdictions with which, in the view of the Regulator, insufficient arrangements for co-operation exist between the Regulator and the relevant Non-ADGM Financial Services Regulator(s) in that jurisdiction(s).
+
+Passage 2
+Passage ID: c199c6e6-8864-4535-8044-6b468becb684
+Text: The Regulator may make Rules specifying—
+(a)	the procedures and arrangements referred to in subsection ‎(1);
+(b)	the market conditions that prevent marking to market and the criteria for using marking to model referred to in subsection ‎(2);
+(c)	the risk management procedures, including the levels and type of collateral and segregation arrangements, required for compliance with subsection ‎(3);
+(d)	the applicable criteria referred to in subsections ‎(5) and ‎(6) including in particular what should be considered as practical or legal impediment to the prompt transfer of own funds and repayment of liabilities between the counterparties;
+(e)	the details of the information on exempt Intragroup Transactions referred to in subsection ‎(7);
+(f)	the contracts that are considered to have a direct, substantial and foreseeable effect within the Abu Dhabi Global Market or the cases where it is necessary or appropriate to prevent the evasion of any provision of these Regulations as referred to in subsection ‎(8); and
+(g)	the dates on which the provisions in this section come into effect.
+
+Passage 3
+Passage ID: 2affa187-b3e3-4438-8d61-ccabc9f0c736
+Text: Without limiting Rule ‎2.2.6(1), the Regulator may, in determining an amount for a Class 2 Captive Insurer, take into account the following:
+
+(a)	the third party risks the Class 2 Captive Insurer expects to insure;
+(b)	how Closely Linked the business or operations giving rise to the third party risks are to the business or operations of the Group to which the Class 2 Captive Insurer belongs;
+(c)	the percentage of Gross Written Premium (up to 20%) that the Class 2 Captive Insurer intends to obtain from third party risks; and
+(d)	any burden or undue risks to the Cedant or other policyholders.
+(3)	Without limiting Rule ‎2.2.6(1), the Regulator may take into account the matters in Rule ‎1.7.2 in determining an amount for a Class 4 Captive Insurer.
+
+Passage 4
+Passage ID: 806edb81-058d-464b-96ff-70717a94159c
+Text: In Rules ‎A4.12.3, ‎A4.12.4 and ‎A4.12.8:
+(a)	contracts of finite risk reinsurance must be excluded from the calculation of the proportional reinsurance element and the non proportional reinsurance element;
+(b)	'provisions in respect of Long Term Insurance Business' means the amount of Long Term Insurance Liability in respect of the contracts concerned, except that the amount may not be less than 85% of the liability determined without taking reinsurance into account; and
+(c)	'capital at risk' means the aggregate amount of sums assured on contracts of Long Term Insurance issued by an Insurer, minus the aggregate amount of provisions in respect of those contracts.  Where the contract is an annuity, the sum assured must be taken to be the present value of the annuity payments.  The capital at risk must be determined separately for each contract, and where the capital at risk calculated for a contract is less than zero, the capital at risk for that contract must be taken as zero.
+
+Passage 5
+Passage ID: 52e45692-b3ed-46af-96f6-8381bb619f7f
+Text: On an application under subsection ‎(1) the Court may require the person concerned to supply it with such accounts or other information as it may require for any one or more of the following purposes—
+(a)	establishing whether any and, if so, what profits have accrued to him as mentioned in paragraph ‎(a) of subsection ‎(1);
+(b)	establishing whether any person or persons have suffered any loss or adverse effect as mentioned in paragraph ‎(b) of subsection ‎(1) and, if so, the extent of that loss or adverse effect; and
+(c)	determining how any amounts are to be paid or distributed under subsection ‎(3).
+
+Passage 6
+Passage ID: d6737bec-9a8f-4492-bea3-1ab510a0b9b3
+Text: Information used by a Benchmark Administrator for the purposes of determining a Specified Benchmark
+A Benchmark Administrator must:
+(a)	ensure that a Specified Benchmark it administers is determined using adequate information, including to the extent that such information is:
+(i)	representative of the state of the market that the Specified Benchmark references; and
+(ii)	made available by reputable, reliable and resilient data sources;
+(b)	be able to identify, at any stage, all Persons providing information in relation to the Specified Benchmark it administers;
+(c)	be able to provide to the Regulator all information (including in (b) above) used to determine a Specified Benchmark it administers, on a daily basis, or as often as such determinations are made; and
+(d)	provide to the Regulator information pertaining to the activity in the underlying markets relevant to a Specified Benchmark it administers, on a quarterly basis, or as otherwise requested by the Regulator.
+
+Passage 7
+Passage ID: affa2bd9-8bb0-4845-9088-1913f1e539c9
+Text: INITIAL DISCLOSURE OF MATERIAL ESTIMATES.
+Disclosure of material estimates of Contingent Resources
+Section 2.3 of the PRMS Guidelines states that Contingent Resources may be assigned for Petroleum Projects that are dependent on ‘technology under development’, and further recommended that a number of guidelines are followed in order to distinguish these estimates from those that should be classified as Unrecoverable Petroleum.  By way of Rule 12.10.1(3), the FSRA fully supports and requires compliance with what is set out in the PRMS Guidelines.
+
+Passage 8
+Passage ID: efb92242-fdd6-4727-b5d7-b570b79c08c7
+Text: Determine the Residence of the Entity.
+(a)	Obtain a self-certification, which may be part of the account opening documentation, that allows the Reporting Financial Institution to determine the Account Holder's residence(s) for tax purposes and confirm the reasonableness of such self-certification based on the information obtained by the Reporting Financial Institution in connection with the opening of the account, including any documentation collected pursuant to AML/KYC Procedures. If the Entity certifies that it has no residence for tax purposes, the Reporting Financial Institution may rely on the address of the principal office of the Entity to determine the residence of the Account Holder.
+(b)	If the self-certification indicates that the Account Holder is resident in a Reportable Jurisdiction, the Reporting Financial Institution must treat the account as a Reportable Account, unless it reasonably determines based on information in its possession or that is publicly available that the Account Holder is not a Reportable Person with respect to such Reportable Jurisdiction.
+
+Passage 9
+Passage ID: 0b22adef-8de9-4de3-91de-4c3dfda46b61
+Text: The notice must:
+(a)	be in such form as the Regulator may from time to time determine;
+(b)	identify the Host Jurisdiction(s) in which the Private Fund will be Promoted;
+(c)	identify the Agents or Licensed Persons (if any) that will conduct the Promotion of the Private Fund;
+(d)	include a copy of the Prospectus containing a disclaimer to the following effect:
+“No regulatory authority in the UAE has any responsibility for reviewing or verifying this prospectus or any other documents in connection with the promotion of this fund. Accordingly, no regulatory authority in the UAE has approved this prospectus or any other associated documents, nor taken any steps to verify the information set out herein, and therefore no regulatory authority in the UAE has any responsibility for the same.  This Passported Fund is a Private Fund and, accordingly, the units thereof may only be promoted to Professional Clients in [insert relevant Host Jurisdictions] by means of private placement."
+(e)	include the relevant fee; and
+(f)	contain, and be accompanied by, such other information as the Regulator may reasonably require.
+
+Passage 10
+Passage ID: 07580698-840a-45d8-b2e7-08e3798c3811
+Text: Operational requirements for use of external credit assessments. The external credit assessment used for determining the applicable risk weight for a CR Exposure must be determined by taking into account the entire amount of Credit Risk (principal and interest) an Authorised Person is exposed to.
+
+Return strict JSON only:
+{
+  "answer": "...",
+  "used_passage_ids": ["..."]
+}

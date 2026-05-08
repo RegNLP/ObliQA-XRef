@@ -1,0 +1,81 @@
+{
+  "start_time": "2026-05-07T16:11:25.510715+00:00",
+  "end_time": "2026-05-07T16:15:14.061771+00:00",
+  "runtime_seconds": 228.55103707313538,
+  "retrieval_setting": "controlled_shared_corpus_canonical_bm25",
+  "retrieval_corpus": "shared_adgm_13015",
+  "bm25_backend": "obliqaxref.curate.ir.BM25Retriever",
+  "bm25_parameters": "rank_bm25.BM25Okapi defaults",
+  "tokenization": "lowercase whitespace split",
+  "cutoff_k": 10,
+  "historical_run_reproduction": false,
+  "canonical_repo_bm25": true,
+  "xref_official_reference_run": "ObliQA-XRef_Out_Datasets/final_large_merged/ObliQA-XRef-ADGM-ALL/bm25.trec",
+  "dataset_sizes": {
+    "ObliQA": 2786,
+    "ObliQA-MP": 447,
+    "ObliQA-XRef-ADGM": 502
+  },
+  "corpus_sizes": {
+    "ObliQA": 13015,
+    "ObliQA-MP": 13015,
+    "ObliQA-XRef-ADGM": 13015
+  },
+  "qrels_counts": {
+    "ObliQA": 3666,
+    "ObliQA-MP": 1061,
+    "ObliQA-XRef-ADGM": 1004
+  },
+  "run_row_counts": {
+    "ObliQA": 27860,
+    "ObliQA-MP": 4470,
+    "ObliQA-XRef-ADGM": 5020
+  },
+  "output_paths": {
+    "metrics_csv": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/reports/controlled_ir_metrics_full.csv",
+    "metrics_json": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/reports/controlled_ir_metrics_full.json",
+    "run_report_json": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/reports/full_ir_run_report.json",
+    "shared_corpus": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/corpora/adgm_shared_passages.jsonl",
+    "corpora": {
+      "ObliQA": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/corpora/adgm_shared_passages.jsonl",
+      "ObliQA-MP": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/corpora/adgm_shared_passages.jsonl",
+      "ObliQA-XRef-ADGM": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/corpora/adgm_shared_passages.jsonl"
+    },
+    "qrels": {
+      "ObliQA": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/qrels/obliqa_test.qrels",
+      "ObliQA-MP": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/qrels/obliqa_mp_test.qrels",
+      "ObliQA-XRef-ADGM": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/qrels/xref_adgm_test.qrels"
+    },
+    "runs": {
+      "ObliQA": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/runs/obliqa_bm25_top10.trec",
+      "ObliQA-MP": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/runs/obliqa_mp_bm25_top10.trec",
+      "ObliQA-XRef-ADGM": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/controlled_comparison_pilot/full_ir/runs/xref_adgm_bm25_top10.trec"
+    }
+  },
+  "shared_corpus_path": "/Users/tuba.gokhan/Desktop/ObliQA-XRef/runs/adapter_adgm/processed/passage_corpus.jsonl",
+  "qrels_mapping_rates": {
+    "ObliQA": 1.0,
+    "ObliQA-MP": 1.0,
+    "ObliQA-XRef-ADGM": 1.0
+  },
+  "qrels_unmapped_counts": {
+    "ObliQA": 0,
+    "ObliQA-MP": 0,
+    "ObliQA-XRef-ADGM": 0
+  },
+  "warnings": [
+    "[ObliQA] qrels_map_methods={'passageid_unique': 1839, 'passageid_text': 1825, 'passageid_text_docid_tiebreak': 2}",
+    "[ObliQA-MP] qrels_map_methods={'id_direct': 1061}"
+  ],
+  "id_collision_counts": {
+    "ObliQA": {
+      "id_text_collisions": 0
+    },
+    "ObliQA-MP": {
+      "id_text_collisions": 0
+    },
+    "ObliQA-XRef-ADGM": {
+      "id_text_collisions": 0
+    }
+  }
+}

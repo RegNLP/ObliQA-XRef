@@ -1,0 +1,128 @@
+[
+  {
+    "QuestionID": "cae4d720-c862-47c1-ac08-af7f29267648",
+    "Question": "In what circumstances is it permissible for a Fund Manager to share customer account and transaction information with Group-wide compliance, audit, and AML/TFS functions, and what safeguards must be in place to protect this information?",
+    "Passages": [
+      {
+        "DocumentID": 1,
+        "Passage": "A Relevant Person which is part of a Group must ensure that it:\n(a)\thas developed and implemented policies and procedures for the sharing of information between Group entities, including the sharing of information relating to CDD and money laundering risks;\n(b)\thas in place adequate safeguards on the confidentiality and use of information exchanged between Group entities, including consideration of relevant data protection legislation;\n(c)\tremains aware of the money laundering risks of the Group as a whole and of its exposure to the Group and takes active steps to mitigate such risks;\n(d)\tcontributes to a Group-wide risk assessment to identify and assess money laundering risks for the Group; and\n(e)\tprovides its Group-wide compliance, audit and AML/TFS functions with customer account and Transaction information from its Branches and Subsidiaries when necessary for AML/TFS purposes.",
+        "PassageID": "4.3.1"
+      },
+      {
+        "DocumentID": 6,
+        "Passage": "In (3), if the Fund Manager and, if appointed, the Trustee agree that the receipt of the property concerned for the account of the Fund:\n(a)\tis not likely to result in any material prejudice to the interest of the Unitholders of the Fund;\n(b)\tis consistent with the objectives of the Fund or Sub-Fund of an Umbrella Fund; and\n(c)\tcould be effected without any breach of the requirements relating to the borrowing and investment restrictions relating to the Fund or Sub-Fund in Rule ‎13.4;\nthen the transfer may be effective and the issue of Units in exchange for assets as part of a transfer scheme may be undertaken.",
+        "PassageID": "PART 6.18.1.3.(4)"
+      },
+      {
+        "DocumentID": 7,
+        "Passage": "Outsourcing: An Authorised Person which uses such service providers must ensure that it:\n(a)\thas undertaken due diligence in choosing suitable service providers;\n(b)\teffectively supervises the outsourced functions or activities; and\n(c)\tdeals effectively with any act or failure to act by the service provider that leads, or might lead, to a breach of any Regulations or Rules.\n",
+        "PassageID": "3.3.31.(3)"
+      },
+      {
+        "DocumentID": 6,
+        "Passage": "A system should be in place to ensure that investment and borrowing powers which are contained in the Rules, where applicable and in the Fund's Constitution and Prospectus are not breached, and that if breaches occur they are identified and rectified.",
+        "PassageID": "APP 4.Guidance.Pricing_controls_by_the_Fund_Manager.15"
+      },
+      {
+        "DocumentID": 13,
+        "Passage": "Applicability and limits. For the purposes of this Section an Authorised Person must:\n(a)\tidentify its Exposures;\n(b)\tidentify its Counterparties, including whether any are Closely Related to each other or Connected to the Authorised Person;\n(c)\tmeasure the size of its Exposures;\n(d)\testablish the value of its Exposures;\n(e)\tdetermine the size of its Exposures as a proportion of its Tier 1;\n(f)\tidentify whether it has Exposures which are subject to the requirements of Section 4.13 (CRM);\n(g)\tidentify which, if any, of its Exposures are exempt in accordance with Section A4.11 from the limits set out in Rules 4.15.4 to 4.15.7;\n(h)\taggregate its Exposures to the same Counterparty or group of Closely Related Counterparties or group of Connected Counterparties;\n(i)\tmonitor and control its Exposures on a daily basis within the Large Exposures limits; and\n(j)\tnotify the Regulator immediately of any breach of the limits set out in this Section and confirm it in writing.\n",
+        "PassageID": "4.15.3"
+      }
+    ],
+    "Group": 10,
+    "dataset": "ObliQA",
+    "split": "test",
+    "sample_seed": 42,
+    "relevant_passage_ids": [
+      "13::4.15.3",
+      "1::4.3.1",
+      "6::APP_4.Guidance.Pricing_controls_by_the_Fund_Manager.15",
+      "6::PART_6.18.1.3.(4)",
+      "7::3.3.31.(3)"
+    ]
+  },
+  {
+    "QuestionID": "e3cb90b3-e753-4026-a558-ea8c32c8f2cc",
+    "Question": "How does the FSRA verify the ongoing compliance of storage facilities located outside ADGM with the requirements set out in Rule 22.4.2(a) to (e)?",
+    "Passages": [
+      {
+        "DocumentID": 34,
+        "Passage": "REGULATORY REQUIREMENTS - SPOT COMMODITY ACTIVITIES\nDelivery & Storage\nPursuant to COBS Rule 22.4.1, a delivery and/or storage facility used by an Authorised Person can be operated from within ADGM or outside ADGM.  Specifically, for the purposes of COBS Rules 22.4.1, an Authorised Person will need to submit to the FSRA the details of how each delivery and storage facility that it proposes to use, whether located inside or outside ADGM, meets the requirements set out in Rule 22.4.2(a) to (e).\n",
+        "PassageID": "33)"
+      },
+      {
+        "DocumentID": 34,
+        "Passage": "REGULATORY REQUIREMENTS - SPOT COMMODITY ACTIVITIES\nDelivery & Storage\nFor the purposes of COBS Rule 22.4.2(a), where the proposed storage facility is located outside ADGM, an Authorised Person should provide an assessment on how the rules and regulations of that jurisdiction are deemed (legally and operationally) equivalent to those of ADGM.  The FSRA will also expect to review services agreements between the Authorised Person and the storage facility, to ensure the legal enforceability of these rules and regulations.\n",
+        "PassageID": "34)"
+      }
+    ],
+    "Group": 2,
+    "dataset": "ObliQA",
+    "split": "test",
+    "sample_seed": 42,
+    "relevant_passage_ids": [
+      "34::33)",
+      "34::34)"
+    ]
+  },
+  {
+    "QuestionID": "25d918a7-2a6b-4590-86e5-6c2fa40dce60",
+    "Question": "What collateral risk management procedures are expected to be in place for a Recognised Clearing House to accept non-standard assets as collateral?",
+    "Passages": [
+      {
+        "DocumentID": 11,
+        "Passage": "Accounting periods, financial reports and auditing – chapter 10. Every Reporting Entity is required to prepare and file certain annual, semi annual and other periodic financial reports relating to the financial position of the relevant Listed Entity. Such reports are required to be prepared in accordance with the specified internationally accepted accounting standards and, in the case of annual financial reports, required to be audited. The requirements relating to the preparation and audit of the financial statements and the Disclosure of such reports within specified periods are set out in chapter 10.\n",
+        "PassageID": "1.2.Guidance.9."
+      },
+      {
+        "DocumentID": 10,
+        "Passage": "\nIn some instances, certain types of assets which are not considered to have low credit, liquidity and market risks may be acceptable for credit purposes if the Recognised Clearing House sets and enforces appropriately conservative haircuts and concentration limits and appropriate collateral risk management procedures are put in place by the Recognised Clearing House. A Recognised Clearing House may, in some circumstances, accept the deliverable of a contract as collateral against the contract for exchange.",
+        "PassageID": "4.10.2.Guidance"
+      }
+    ],
+    "Group": 4,
+    "dataset": "ObliQA",
+    "split": "test",
+    "sample_seed": 42,
+    "relevant_passage_ids": [
+      "10::4.10.2.Guidance",
+      "11::1.2.Guidance.9."
+    ]
+  },
+  {
+    "QuestionID": "6a77827d-a4c3-42b0-bb88-7535f5e6b3e4",
+    "Question": "In a scenario where a bank is engaging in a transaction involving a security, should the bank's Credit Risk Weight assessment be based on the entity that issued the security or on the counterparty with whom the bank is directly transacting?",
+    "Passages": [
+      {
+        "DocumentID": 13,
+        "Passage": "CRWs must be calculated on the Counterparty to the transaction, not on the Issuer of the Security.",
+        "PassageID": "APP4.A4.6.2"
+      }
+    ],
+    "Group": 1,
+    "dataset": "ObliQA",
+    "split": "test",
+    "sample_seed": 42,
+    "relevant_passage_ids": [
+      "13::APP4.A4.6.2"
+    ]
+  },
+  {
+    "QuestionID": "ed874d65-2876-489c-b853-2442f0926e82",
+    "Question": "What ongoing compliance monitoring and reporting obligations should a VC Manager expect after obtaining an FSP, and what are the consequences of non-compliance?",
+    "Passages": [
+      {
+        "DocumentID": 18,
+        "Passage": "Financial Services Permissions. VC Managers operating in ADGM require a Financial Services Permission (“FSP”) to undertake any Regulated Activity pertaining to VC Funds and/or co-investments by third parties in VC Funds. The Regulated Activities covered by the FSP will be dependent on the VC Managers’ investment strategy and business model.\n(a)\tManaging a Collective Investment Fund: this includes carrying out fund management activities in respect of a VC Fund.\n(b)\tAdvising on Investments or Credit : for VC Managers these activities will be restricted to activities related to co-investment alongside a VC Fund which the VC Manager manages, such as recommending that a client invest in an investee company alongside the VC Fund and on the strategy and structure required to make the investment.\n(c)\tArranging Deals in Investments: VC Managers may also wish to make arrangements to facilitate co-investments in the investee company.\nAuthorisation fees and supervision fees for a VC Manager are capped at USD 10,000 regardless of whether one or both of the additional Regulated Activities in b) and c) above in relation to co-investments are included in its FSP. The FSP will include restrictions appropriate to the business model of a VC Manager.",
+        "PassageID": "3.2"
+      }
+    ],
+    "Group": 4,
+    "dataset": "ObliQA",
+    "split": "test",
+    "sample_seed": 42,
+    "relevant_passage_ids": [
+      "18::3.2"
+    ]
+  }
+]

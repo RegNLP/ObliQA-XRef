@@ -1,0 +1,52 @@
+# Sample Selection Report
+
+- sample_size: 10
+- seed: 42
+
+## obliqa
+- source_rows: 2786
+- eligible_rows: 2786
+- selected_rows: 10
+- stratification_fields: Group
+- every_selected_query_has_10_retrieved_passages: True
+- selected_ids: 43d3d0f6-2dd9-442b-94c8-761a0c24f336, 4fcb9d6e-ac54-4d2f-b88a-bba74977389b, 7ad09a62-41f0-427f-a0d1-ff7a6321ff16, 7f2cb9c8-558b-4b71-8c16-aeb266ed192c, 8da7b6ca-b369-4bea-91c7-8a418e287463, cd8b132c-30b0-4322-bd65-e685a5237ad9, df2750df-6333-4a8e-94f0-be7345154a00, fb2ac9aa-efe6-47c0-a2c7-c89ebbef47cf, fe515374-4abe-4841-937f-5d5c1937b9d5, ff29c71e-2b2d-4713-9d41-1b8a9ae0a400
+
+| stratum | selected | population |
+| --- | ---: | ---: |
+| 1 | 3 | 770 |
+| 10 | 1 | 281 |
+| 2 | 2 | 708 |
+| 3 | 2 | 558 |
+| 4 | 2 | 469 |
+
+## obliqa_mp
+- source_rows: 447
+- eligible_rows: 447
+- selected_rows: 10
+- stratification_fields: passage_count_bucket
+- every_selected_query_has_10_retrieved_passages: True
+- selected_ids: 1a8146d6-bf5f-44e8-aca7-3831116d312a, 4ba14165-b219-4945-8247-813327a94f7e, 6982036f-1aeb-4b64-971b-9ea473e362fb, 6ca54ae7-f87d-48a3-8633-95a986e7f84e, 7460d74d-ce67-4c69-9792-21cbe6545624, 74ad5f04-333c-4415-97e4-7a07605bc7b7, 7afdd71f-5231-4295-bf54-0279612b19e7, 7fd823d6-1ec2-4eec-9c63-08ba7b4d2b8a, 894564f2-7d27-43d7-a41f-4fe93275684a, ab06d173-f0cd-42f0-b8ad-cc27f29836b0
+
+| stratum | selected | population |
+| --- | ---: | ---: |
+| 2 | 7 | 326 |
+| 3-4 | 3 | 109 |
+| 5+ | 0 | 12 |
+
+## xref_adgm
+- source_rows: 502
+- eligible_rows: 502
+- selected_rows: 10
+- stratification_fields: generation_method, sampling_regime
+- every_selected_query_has_10_retrieved_passages: True
+- selected_ids: 05c4049981e21ee1, 0b86a8dd09b7f6a1, 1d401bad230c5d15, 6095cbce8b3e90c8, 6376c98d70bea1a5, 7962e3e212277a6f, a3a19aa37566a2ea, c831734019e38dc2, db02fc6e11476afb, fab5a7a3171dcb25
+
+| stratum | selected | population |
+| --- | ---: | ---: |
+| DPEL × hard_enriched | 1 | 74 |
+| DPEL × mixed_difficulty | 2 | 99 |
+| SCHEMA × hard_enriched | 3 | 141 |
+| SCHEMA × mixed_difficulty | 4 | 188 |
+
+## Warnings
+- None

@@ -1,0 +1,32 @@
+{
+  "dry_run": true,
+  "prompt_condition_requested": "both",
+  "start_time": "2026-05-07T17:38:54.231227+00:00",
+  "end_time": "2026-05-07T17:38:54.237737+00:00",
+  "runtime_seconds": 0.006083582993596792,
+  "num_calls_planned": 60,
+  "num_calls_attempted": 0,
+  "num_successful": 0,
+  "num_failed": 0,
+  "token_totals": {
+    "prompt_tokens": null,
+    "completion_tokens": null,
+    "total_tokens": null
+  },
+  "average_time_per_call": null,
+  "JSON_parse_failures": 0,
+  "empty_generated_answers": 0,
+  "insufficient_evidence_answer_count": 0,
+  "output_file_paths": [
+    "batch_runs/sample_10/answers/general/obliqa_bm25_gpt52_answers.json",
+    "batch_runs/sample_10/answers/general/obliqa_mp_bm25_gpt52_answers.json",
+    "batch_runs/sample_10/answers/general/xref_adgm_bm25_gpt52_answers.json",
+    "batch_runs/sample_10/answers/task_aware/obliqa_bm25_gpt52_answers.json",
+    "batch_runs/sample_10/answers/task_aware/obliqa_mp_bm25_gpt52_answers.json",
+    "batch_runs/sample_10/answers/task_aware/xref_adgm_bm25_gpt52_answers.json"
+  ],
+  "actual_model_or_deployment": "gpt-5.2-MBZUAI",
+  "model_deployment": "gpt-5.2-MBZUAI",
+  "provider": "azure",
+  "api_version": "2024-12-01-preview"
+}

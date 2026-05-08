@@ -1,0 +1,267 @@
+{
+  "safe_for_overnight_run": true,
+  "recommendation": "proceed",
+  "files_modified_by_audit": [
+    "controlled_comparison_pilot/scripts/audit_rendered_prompts.py",
+    "controlled_comparison_pilot/reports/rendered_prompt_audit/*.txt",
+    "controlled_comparison_pilot/reports/prompt_audit_report.json",
+    "controlled_comparison_pilot/reports/prompt_audit_report.md"
+  ],
+  "prompt_file_audit": [
+    {
+      "path": "prompts/general_grounded_prompt.txt",
+      "checks": {
+        "uses_only_retrieved_passages": true,
+        "forbids_outside_knowledge": true,
+        "forbids_gold_answers": true,
+        "concise_professional": true,
+        "strict_json": true,
+        "answer_schema": true,
+        "requires_pid_tags": true,
+        "only_ids_in_retrieved": true,
+        "not_cite_unused": true,
+        "insufficient_evidence_fallback": true,
+        "forbids_eval_metadata": true
+      },
+      "leaked_metadata_terms": [],
+      "ok": true
+    },
+    {
+      "path": "prompts/task_aware_obliqa_prompt.txt",
+      "checks": {
+        "uses_only_retrieved_passages": true,
+        "forbids_outside_knowledge": true,
+        "forbids_gold_answers": true,
+        "concise_professional": true,
+        "strict_json": true,
+        "answer_schema": true,
+        "requires_pid_tags": true,
+        "only_ids_in_retrieved": true,
+        "not_cite_unused": true,
+        "insufficient_evidence_fallback": true,
+        "forbids_eval_metadata": true
+      },
+      "leaked_metadata_terms": [],
+      "ok": true
+    },
+    {
+      "path": "prompts/task_aware_obliqa_mp_prompt.txt",
+      "checks": {
+        "uses_only_retrieved_passages": true,
+        "forbids_outside_knowledge": true,
+        "forbids_gold_answers": true,
+        "concise_professional": true,
+        "strict_json": true,
+        "answer_schema": true,
+        "requires_pid_tags": true,
+        "only_ids_in_retrieved": true,
+        "not_cite_unused": true,
+        "insufficient_evidence_fallback": true,
+        "forbids_eval_metadata": true
+      },
+      "leaked_metadata_terms": [],
+      "ok": true
+    },
+    {
+      "path": "prompts/task_aware_xref_prompt.txt",
+      "checks": {
+        "uses_only_retrieved_passages": true,
+        "forbids_outside_knowledge": true,
+        "forbids_gold_answers": true,
+        "concise_professional": true,
+        "strict_json": true,
+        "answer_schema": true,
+        "requires_pid_tags": true,
+        "only_ids_in_retrieved": true,
+        "not_cite_unused": true,
+        "insufficient_evidence_fallback": true,
+        "forbids_eval_metadata": true
+      },
+      "leaked_metadata_terms": [],
+      "ok": true
+    }
+  ],
+  "rendered_prompt_audit": [
+    {
+      "condition": "general",
+      "dataset": "obliqa",
+      "input_path": "answer_inputs/general/obliqa_bm25_gpt52_input.json",
+      "prompt_path": "prompts/general_grounded_prompt.txt",
+      "preview_path": "reports/rendered_prompt_audit/general_obliqa_prompt_preview.txt",
+      "prompt_version": "controlled_bm25_gpt52_general_grounded_v1",
+      "QuestionID": "cae4d720-c862-47c1-ac08-af7f29267648",
+      "num_retrieved_passages": 10,
+      "first_3_RetrievedPassageIDs": [
+        "1::4.3.1",
+        "1::9.3.2.(1)",
+        "1::7.2.4"
+      ],
+      "audit": {
+        "checks": {
+          "retrieved_passages_include_citeable_ids": true,
+          "no_gold_answer_in_rendered_prompt": true,
+          "no_relevant_passage_ids_in_rendered_prompt": true,
+          "no_source_target_metadata_labels": true,
+          "no_answer_or_reference_answer_in_rendered_prompt": true,
+          "contains_strict_json_requirement": true,
+          "contains_pid_instruction": true,
+          "first_three_ids_present": true
+        },
+        "leaks": [],
+        "ok": true
+      }
+    },
+    {
+      "condition": "general",
+      "dataset": "obliqa_mp",
+      "input_path": "answer_inputs/general/obliqa_mp_bm25_gpt52_input.json",
+      "prompt_path": "prompts/general_grounded_prompt.txt",
+      "preview_path": "reports/rendered_prompt_audit/general_obliqa_mp_prompt_preview.txt",
+      "prompt_version": "controlled_bm25_gpt52_general_grounded_v1",
+      "QuestionID": "d6e4577b-8bd5-4979-b06c-1a4c71deff03",
+      "num_retrieved_passages": 10,
+      "first_3_RetrievedPassageIDs": [
+        "33127e68-bce1-4ef1-a2b8-86217e654659",
+        "c199c6e6-8864-4535-8044-6b468becb684",
+        "2affa187-b3e3-4438-8d61-ccabc9f0c736"
+      ],
+      "audit": {
+        "checks": {
+          "retrieved_passages_include_citeable_ids": true,
+          "no_gold_answer_in_rendered_prompt": true,
+          "no_relevant_passage_ids_in_rendered_prompt": true,
+          "no_source_target_metadata_labels": true,
+          "no_answer_or_reference_answer_in_rendered_prompt": true,
+          "contains_strict_json_requirement": true,
+          "contains_pid_instruction": true,
+          "first_three_ids_present": true
+        },
+        "leaks": [],
+        "ok": true
+      }
+    },
+    {
+      "condition": "general",
+      "dataset": "xref_adgm",
+      "input_path": "answer_inputs/general/xref_adgm_bm25_gpt52_input.json",
+      "prompt_path": "prompts/general_grounded_prompt.txt",
+      "preview_path": "reports/rendered_prompt_audit/general_xref_adgm_prompt_preview.txt",
+      "prompt_version": "controlled_bm25_gpt52_general_grounded_v1",
+      "QuestionID": "09ed83603d5c9d13",
+      "num_retrieved_passages": 10,
+      "first_3_RetrievedPassageIDs": [
+        "6ebadf70-c332-487e-ac96-759bdd2eacc8",
+        "b249219a-57ec-4b15-be46-58475357c6c1",
+        "5aa332b8-acaa-492f-8e3e-ce87d73337c8"
+      ],
+      "audit": {
+        "checks": {
+          "retrieved_passages_include_citeable_ids": true,
+          "no_gold_answer_in_rendered_prompt": true,
+          "no_relevant_passage_ids_in_rendered_prompt": true,
+          "no_source_target_metadata_labels": true,
+          "no_answer_or_reference_answer_in_rendered_prompt": true,
+          "contains_strict_json_requirement": true,
+          "contains_pid_instruction": true,
+          "first_three_ids_present": true
+        },
+        "leaks": [],
+        "ok": true
+      }
+    },
+    {
+      "condition": "task_aware",
+      "dataset": "obliqa",
+      "input_path": "answer_inputs/task_aware/obliqa_bm25_gpt52_input.json",
+      "prompt_path": "prompts/task_aware_obliqa_prompt.txt",
+      "preview_path": "reports/rendered_prompt_audit/task_aware_obliqa_prompt_preview.txt",
+      "prompt_version": "controlled_bm25_gpt52_task_aware_obliqa_v1",
+      "QuestionID": "cae4d720-c862-47c1-ac08-af7f29267648",
+      "num_retrieved_passages": 10,
+      "first_3_RetrievedPassageIDs": [
+        "1::4.3.1",
+        "1::9.3.2.(1)",
+        "1::7.2.4"
+      ],
+      "audit": {
+        "checks": {
+          "retrieved_passages_include_citeable_ids": true,
+          "no_gold_answer_in_rendered_prompt": true,
+          "no_relevant_passage_ids_in_rendered_prompt": true,
+          "no_source_target_metadata_labels": true,
+          "no_answer_or_reference_answer_in_rendered_prompt": true,
+          "contains_strict_json_requirement": true,
+          "contains_pid_instruction": true,
+          "first_three_ids_present": true
+        },
+        "leaks": [],
+        "ok": true
+      }
+    },
+    {
+      "condition": "task_aware",
+      "dataset": "obliqa_mp",
+      "input_path": "answer_inputs/task_aware/obliqa_mp_bm25_gpt52_input.json",
+      "prompt_path": "prompts/task_aware_obliqa_mp_prompt.txt",
+      "preview_path": "reports/rendered_prompt_audit/task_aware_obliqa_mp_prompt_preview.txt",
+      "prompt_version": "controlled_bm25_gpt52_task_aware_obliqa_mp_v1",
+      "QuestionID": "d6e4577b-8bd5-4979-b06c-1a4c71deff03",
+      "num_retrieved_passages": 10,
+      "first_3_RetrievedPassageIDs": [
+        "33127e68-bce1-4ef1-a2b8-86217e654659",
+        "c199c6e6-8864-4535-8044-6b468becb684",
+        "2affa187-b3e3-4438-8d61-ccabc9f0c736"
+      ],
+      "audit": {
+        "checks": {
+          "retrieved_passages_include_citeable_ids": true,
+          "no_gold_answer_in_rendered_prompt": true,
+          "no_relevant_passage_ids_in_rendered_prompt": true,
+          "no_source_target_metadata_labels": true,
+          "no_answer_or_reference_answer_in_rendered_prompt": true,
+          "contains_strict_json_requirement": true,
+          "contains_pid_instruction": true,
+          "first_three_ids_present": true
+        },
+        "leaks": [],
+        "ok": true
+      }
+    },
+    {
+      "condition": "task_aware",
+      "dataset": "xref_adgm",
+      "input_path": "answer_inputs/task_aware/xref_adgm_bm25_gpt52_input.json",
+      "prompt_path": "prompts/task_aware_xref_prompt.txt",
+      "preview_path": "reports/rendered_prompt_audit/task_aware_xref_adgm_prompt_preview.txt",
+      "prompt_version": "controlled_bm25_gpt52_task_aware_xref_v1",
+      "QuestionID": "09ed83603d5c9d13",
+      "num_retrieved_passages": 10,
+      "first_3_RetrievedPassageIDs": [
+        "6ebadf70-c332-487e-ac96-759bdd2eacc8",
+        "b249219a-57ec-4b15-be46-58475357c6c1",
+        "5aa332b8-acaa-492f-8e3e-ce87d73337c8"
+      ],
+      "audit": {
+        "checks": {
+          "retrieved_passages_include_citeable_ids": true,
+          "no_gold_answer_in_rendered_prompt": true,
+          "no_relevant_passage_ids_in_rendered_prompt": true,
+          "no_source_target_metadata_labels": true,
+          "no_answer_or_reference_answer_in_rendered_prompt": true,
+          "contains_strict_json_requirement": true,
+          "contains_pid_instruction": true,
+          "first_three_ids_present": true
+        },
+        "leaks": [],
+        "ok": true
+      }
+    }
+  ],
+  "prompt_comparison": {
+    "general_prompt_is_dataset_neutral": true,
+    "obliqa_task_aware_adds_obligation_guidance_only": true,
+    "obliqa_mp_task_aware_adds_multi_passage_synthesis_guidance_only": true,
+    "xref_task_aware_adds_citation_cross_reference_guidance_only": true,
+    "task_aware_prompts_do_not_leak_gold_source_target_roles": true
+  }
+}

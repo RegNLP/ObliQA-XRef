@@ -212,7 +212,9 @@ __marimo__/
 .env
 
 # Local caches and OS files
+.DS_Store
 **/.DS_Store
+*.bak_*
 # Heavy IR cache artifacts (not intended for git)
 runs/**/work/ir_cache/*.pkl
 
