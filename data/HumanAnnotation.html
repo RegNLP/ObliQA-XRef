@@ -134,7 +134,6 @@
             border: 1px solid #1b2554;
             border-radius: 999px;
             overflow: hidden;
-            margin-left: auto;
             min-width: 240px;
         }
 
@@ -211,6 +210,10 @@
             border: 1px solid #1b2554;
             padding: 4px 8px;
             border-radius: 999px;
+        }
+
+        .toolbar .meta {
+            margin-left: 4px;
         }
 
         .small {
@@ -295,12 +298,6 @@
 
     <div class="app">
         <aside class="panel" id="left">
-            <h2>Item</h2>
-            <div class="card">
-                <div class="meta" id="meta"></div>
-                <div class="small" id="counts"></div>
-            </div>
-
             <div class="card"><strong>QUESTION</strong>
                 <pre id="q"></pre>
             </div>
@@ -316,6 +313,7 @@
             <div class="toolbar">
                 <button id="prev" class="btn" title="Previous item">⟵ Previous</button>
                 <button id="next" class="btn" title="Next item">Next ⟶</button>
+                <div class="meta" id="meta"></div>
                 <div class="progress">
                     <div id="bar"></div>
                 </div>
@@ -488,7 +486,6 @@
             s: document.getElementById('s'),
             t: document.getElementById('t'),
             meta: document.getElementById('meta'),
-            counts: document.getElementById('counts'),
             bar: document.getElementById('bar'),
             comment: document.getElementById('comment')
         };
@@ -527,6 +524,22 @@
             return String(s ?? '').replace(/[&<>"']/g, c => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             })[c]);
+        }
+
+        function isInternalPassageId(s) {
+            const v = String(s ?? '').trim();
+            return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+                || /^[0-9a-f]{16,}$/i.test(v);
+        }
+
+        function readablePassageId(label, pid) {
+            const cleanLabel = String(label ?? '').trim();
+            if (cleanLabel && !isInternalPassageId(cleanLabel)) return cleanLabel;
+
+            const cleanPid = String(pid ?? '').trim();
+            if (cleanPid && !isInternalPassageId(cleanPid)) return cleanPid;
+
+            return '';
         }
 
         // Migrate legacy annotation columns to new schema
@@ -597,6 +610,22 @@
 
         function savePosition() { localStorage.setItem(localKeyPos(currentFileKey), String(idx)); }
 
+        function updateStatus() {
+            const N = totalRows();
+            const done = doneCount();
+            const remained = Math.max(0, N - done);
+            if (N <= 0) {
+                els.meta.innerHTML = '<span>No assignment loaded</span>';
+                els.bar.style.width = '0%';
+                return;
+            }
+            els.meta.innerHTML =
+                `<span>Item number ${idx} / ${N}</span>` +
+                `<span>Labelled ${done}</span>` +
+                `<span>Remained ${remained}</span>`;
+            els.bar.style.width = ((done / Math.max(1, N)) * 100).toFixed(1) + '%';
+        }
+
         // ======== Rendering ========
         function setRadio(name, value) {
             document.querySelectorAll(`input[name="${name}"]`).forEach(r => { r.checked = (r.value === value); });
@@ -609,9 +638,7 @@
         function show(iData) {
             if (table.length <= 1) {
                 els.q.textContent = els.s.textContent = els.t.textContent = '';
-                els.meta.innerHTML = '<span>No assignment loaded</span>';
-                els.counts.textContent = '';
-                els.bar.style.width = '0%';
+                updateStatus();
                 els.prev.disabled = els.prev2.disabled = true;
                 els.next.disabled = els.next2.disabled = true;
                 return;
@@ -625,14 +652,14 @@
             const sText = get(idx, "source_text") || '';
             const tText = get(idx, "target_text") || '';
             const refText = get(idx, "ReferenceText") || get(idx, "reference_text") || '';
-            const sPassageId = get(idx, "source_passage_label") || '';
-            const tPassageId = get(idx, "target_passage_label") || '';
+            const sPassageId = readablePassageId(get(idx, "source_passage_label"), get(idx, "source_passage_pid"));
+            const tPassageId = readablePassageId(get(idx, "target_passage_label"), get(idx, "target_passage_pid"));
             const sourceDocId = get(idx, "source_doc_id") || '';
             const targetDocId = get(idx, "target_doc_id") || '';
             const isUKFIN = sourceDocId.includes('pra_rulebook__') || targetDocId.includes('pra_rulebook__');
             if (sText) {
                 let sHTML = "";
-                if (!isUKFIN && sPassageId) sHTML += "<span class='ref-text'>Passage ID : " + escHTML(sPassageId) + "</span><br><br>";
+                if (sPassageId) sHTML += "<span class='ref-text'>Source Passage ID : " + escHTML(sPassageId) + "</span><br><br>";
                 sHTML += escHTML(sText);
                 if (!isUKFIN && refText) sHTML += "<br><br><span class='ref-text'>Reference Text : " + escHTML(refText) + "</span>";
                 els.s.innerHTML = sHTML;
@@ -641,7 +668,7 @@
             }
             if (tText) {
                 let tHTML = "";
-                if (!isUKFIN && tPassageId) tHTML += "<span class='ref-text'>Passage ID : " + escHTML(tPassageId) + "</span><br><br>";
+                if (tPassageId) tHTML += "<span class='ref-text'>Target Passage ID : " + escHTML(tPassageId) + "</span><br><br>";
                 tHTML += escHTML(tText);
                 els.t.innerHTML = tHTML;
             } else {
@@ -649,22 +676,7 @@
             }
             // Expected answer intentionally hidden in UI
 
-            const qa_id = get(idx, "qa_id");
-            const extras = [];
-            for (const k of ["method", "split", "persona", "source_passage_pid", "target_passage_pid"]) {
-                if (k in col) {
-                    const v = get(idx, k);
-                    if (v) extras.push(`<span>${k}: ${v}</span>`);
-                }
-            }
-            // Single reference_type badge (prefer ReferenceType, fallback to reference_type)
-            const refTypeVal = (col["ReferenceType"] != null ? get(idx, "ReferenceType") : '') || (col["reference_type"] != null ? get(idx, "reference_type") : '');
-            if (refTypeVal) extras.push(`<span>reference_type: ${refTypeVal}</span>`);
-            els.meta.innerHTML = `<span>qa_id: ${qa_id || '(missing)'}</span><span>item ${idx} / ${N}</span>` + (extras.length ? extras.join('') : '');
-
-            const done = doneCount();
-            els.counts.textContent = `${done} labeled / ${N} total`;
-            els.bar.style.width = ((done / Math.max(1, N)) * 100).toFixed(1) + '%';
+            updateStatus();
 
             setRadio('q_understandable', get(idx, "q_understandable"));
             setRadio('passage_relevance', get(idx, "passage_relevance"));
@@ -685,6 +697,7 @@
             const csvText = csvStringify(table);
             localStorage.setItem(localKeyCSV(currentFileKey), csvText);
             savePosition();
+            updateStatus();
         }
 
         // ======== Load/Save ========
