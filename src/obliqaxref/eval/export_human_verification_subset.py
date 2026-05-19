@@ -77,8 +77,9 @@ CSV_FIELDNAMES = [
     "source_path",
     # Annotation columns (empty; annotator fills these)
     "q_understandable",
-    "passage_relevance",
-    "explicit_citation",
+    "question_phrasing_reuse",
+    "cross_reference_connection_type",
+    "evidence_dependency",
     "comment",
 ]
 
@@ -272,8 +273,9 @@ def build_row(
         "source_path": source_file,
         # Annotation columns empty — annotator fills these
         "q_understandable": "",
-        "passage_relevance": "",
-        "explicit_citation": "",
+        "question_phrasing_reuse": "",
+        "cross_reference_connection_type": "",
+        "evidence_dependency": "",
         "comment": "",
     }
 
@@ -555,15 +557,16 @@ extracted from the final merged ObliQA-XRef dataset for manual audit.
    self-contained single-page HTML file).
 2. Click **"Start assignment"** and upload **`{csv_filename}`** from this directory.
 3. The tool shows each item's question, source passage, and target passage.
-   Navigate with the Previous / Next buttons and fill in the three annotation
+   Navigate with the Previous / Next buttons and fill in the four annotation
    questions for each item:
 
    | Column | Values | Meaning |
    |---|---|---|
-   | `q_understandable` | `yes` / `no` | Is the question understandable and well-formed? |
-   | `passage_relevance` | `both` / `s_only` / `t_only` / `neither_mismatch` | Which passage(s) are relevant to the question? |
-   | `explicit_citation` | `yes` / `no` | Does the source passage explicitly refer to the target passage? |
-   | `comment` | free text | Optional short note (1–2 clauses) on ambiguity or errors. |
+   | `q_understandable` | `yes` / `no` / `partial_unclear` | Is the question understandable? |
+   | `question_phrasing_reuse` | `low_reuse` / `moderate_reuse` / `high_reuse` / `unclear` | To what extent does the question reuse wording from the passages? |
+   | `cross_reference_connection_type` | `strict_explicit` / `range_based_explicit` / `implicit_semantic` / `no_relation` | What is the nature of the cross-reference connection? |
+   | `evidence_dependency` | `both_needed` / `source_sufficient` / `target_sufficient` / `insufficient_mismatch_unclear` | Which passage(s) appear to provide the evidence needed for the question? |
+   | `comment` | free text | Optional short note. |
 
 4. Click **"Save progress"** to download the updated CSV at any time.
    Click **"Continue"** on a later visit to resume from where you left off.
