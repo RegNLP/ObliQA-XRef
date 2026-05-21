@@ -1,0 +1,4 @@
+field,annotators,n_items_complete,n_annotators,unanimous,unanimous_rate,has_majority,majority_rate,all_different,all_different_rate,fleiss_kappa,krippendorff_alpha,majority_label_distribution
+Q1_question_understandability,human_aniruh;human_nfonsam;llm_gemini-2.5-pro;llm_gpt-4.1-mini;llm_gpt-5.1,100,5,84,0.84,100,1.0,0,0.0,0.0903,0.0922,"{""partial_unclear"": 1, ""yes"": 99}"
+Q2_question_fluency_reuse,human_aniruh;human_nfonsam;llm_gemini-2.5-pro;llm_gpt-4.1-mini;llm_gpt-5.1,100,5,7,0.07,100,1.0,0,0.0,-0.008,-0.006,"{""mostly_natural_rephrased"": 62, ""some_copied_acceptable"": 37, ""too_much_copied_unnatural"": 1}"
+Q3_evidence_dependency,human_aniruh;human_nfonsam;llm_gemini-2.5-pro;llm_gpt-4.1-mini;llm_gpt-5.1,100,5,61,0.61,100,1.0,0,0.0,0.1109,0.1127,"{""both_needed"": 96, ""source_only_sufficient"": 1, ""target_only_sufficient"": 3}"

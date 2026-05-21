@@ -1,0 +1,4 @@
+dimension,n,human_human_agreement,human_human_kappa,llm_llm_agreement,llm_llm_kappa,mean_human_llm_agreement,mean_human_llm_kappa,unanimous_4way_rate,majority_3plus_rate,fleiss_kappa_4way,majority_label_distribution
+Question understandability,100,0.85,-0.0183,0.96,-0.0152,0.92,0.0723,0.84,0.97,0.063,"{""yes"": 100}"
+Question fluency / reuse,100,0.46,0.1335,0.53,0.0617,0.435,0.0881,0.1,0.56,0.0408,"{""mostly_natural_rephrased"": 40, ""some_copied_acceptable"": 59, ""too_much_copied_unnatural"": 1}"
+Evidence dependency,100,0.87,-0.0156,0.82,0.458,0.755,-0.0352,0.62,0.88,0.0656,"{""both_needed"": 99, ""source_only_sufficient"": 1}"

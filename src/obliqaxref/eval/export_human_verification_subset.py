@@ -76,10 +76,9 @@ CSV_FIELDNAMES = [
     "original_item_id",
     "source_path",
     # Annotation columns (empty; annotator fills these)
-    "q_understandable",
-    "question_phrasing_reuse",
-    "cross_reference_connection_type",
-    "evidence_dependency",
+    "question_validity_clarity",
+    "question_fluency_naturalness",
+    "source_target_evidence_dependency",
     "comment",
 ]
 
@@ -272,10 +271,9 @@ def build_row(
         "original_item_id": item_id,
         "source_path": source_file,
         # Annotation columns empty — annotator fills these
-        "q_understandable": "",
-        "question_phrasing_reuse": "",
-        "cross_reference_connection_type": "",
-        "evidence_dependency": "",
+        "question_validity_clarity": "",
+        "question_fluency_naturalness": "",
+        "source_target_evidence_dependency": "",
         "comment": "",
     }
 
@@ -557,15 +555,14 @@ extracted from the final merged ObliQA-XRef dataset for manual audit.
    self-contained single-page HTML file).
 2. Click **"Start assignment"** and upload **`{csv_filename}`** from this directory.
 3. The tool shows each item's question, source passage, and target passage.
-   Navigate with the Previous / Next buttons and fill in the four annotation
+   Navigate with the Previous / Next buttons and fill in the three annotation
    questions for each item:
 
    | Column | Values | Meaning |
    |---|---|---|
-   | `q_understandable` | `yes` / `no` / `partial_unclear` | Is the question understandable? |
-   | `question_phrasing_reuse` | `low_reuse` / `moderate_reuse` / `high_reuse` / `unclear` | To what extent does the question reuse wording from the passages? |
-   | `cross_reference_connection_type` | `strict_explicit` / `range_based_explicit` / `implicit_semantic` / `no_relation` | What is the nature of the cross-reference connection? |
-   | `evidence_dependency` | `both_needed` / `source_sufficient` / `target_sufficient` / `insufficient_mismatch_unclear` | Which passage(s) appear to provide the evidence needed for the question? |
+   | `question_validity_clarity` | `yes` / `partial_unclear` / `no` | Is the question understandable? |
+   | `question_fluency_naturalness` | `mostly_natural_rephrased` / `some_copied_acceptable` / `too_much_copied_unnatural` / `unclear` | Is the question natural, or does it rely too heavily on copied passage wording? |
+   | `source_target_evidence_dependency` | `both_needed` / `source_only_sufficient` / `target_only_sufficient` / `neither_mismatch_unclear` | Which passage(s) are needed to answer the question? |
    | `comment` | free text | Optional short note. |
 
 4. Click **"Save progress"** to download the updated CSV at any time.

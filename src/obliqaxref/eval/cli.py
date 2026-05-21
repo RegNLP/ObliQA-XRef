@@ -117,10 +117,55 @@ def _ensure_ir_runs(corpus: str, out_dir: Path, *, stage_runs: bool = False, cur
         # If trec files already present and not forcing restage, leave as-is
         trecs = list(dst_dir.glob("*.trec")) if dst_dir.exists() else []
         if trecs and not stage_runs:
-                logger.info("IR runs already present; not restaging for %s", corpus.upper())
-                return dst_dir
+            logger.info("IR runs already present; not restaging for %s", corpus.upper())
+            return dst_dir
         # Otherwise, stage (will also clean stale trecs)
         return _stage_dataset_layout(corpus, out_dir, curate_suffix=curate_suffix)
+
+
+def _sanity_filter_methods(
+        corpus: str,
+        root_dir: Path,
+        methods: list[str] | None,
+        normalize_docids: bool = False,
+        min_overlap_ratio: float = 0.01,
+    ) -> list[str]:
+        """Filter methods whose TREC qids have near-zero overlap with test qids.
+
+        Logs per-method overlap; returns filtered list. Methods with missing TREC files are skipped.
+        """
+        try:
+            items_all = ir_eval_mod.load_test_split(corpus, root=root_dir)
+        except FileNotFoundError as e:
+            logger.warning("Missing test split for %s under %s: %s", corpus, root_dir, e)
+            return []
+        qrels, _, _ = ir_eval_mod.build_qrels(items_all, normalize_docids=normalize_docids)
+        test_qids = set(qrels.keys())
+        selected: list[str] = []
+        to_check = methods or [
+            "bm25",
+            "ft_e5",
+            "rrf_bm25_e5",
+            "ce_rerank_union200",
+            "bm25_xref_expand",
+            "e5_xref_expand",
+            "rrf_xref_expand",
+        ]
+        for m in to_check:
+            try:
+                run = ir_eval_mod.load_trec_run(corpus, m, root=root_dir, normalize_docids=normalize_docids)
+            except FileNotFoundError:
+                logger.warning("Skipping missing TREC run: %s for %s", m, corpus)
+                continue
+            run_qids = set(run.keys())
+            overlap = len(test_qids & run_qids)
+            ratio = (overlap / max(1, len(test_qids)))
+            logger.info("Method=%s corpus=%s: test_qids=%d run_qids=%d overlap=%d (%.1f%%)", m, corpus, len(test_qids), len(run_qids), overlap, 100*ratio)
+            if overlap == 0 or ratio < min_overlap_ratio:
+                logger.warning("Skipping %s due to low qid overlap (%.1f%%)", m, 100*ratio)
+                continue
+            selected.append(m)
+        return selected
 
 
 def main():
@@ -535,11 +580,19 @@ def main():
                 _ensure_ir_runs(c, root_dir, stage_runs=args.stage_runs)
             except Exception as e:
                 logger.warning("IR staging check failed for %s: %s", c, e)
-
+            filtered_methods = _sanity_filter_methods(
+                c,
+                root_dir,
+                methods=args.methods,
+                normalize_docids=args.normalize_docids,
+            )
+            if not filtered_methods:
+                logger.warning("No valid methods to evaluate for %s (check TREC qid overlap).", c)
+                continue
             ir_eval_mod.main(
                 corpus=c,
                 k=args.k,
-                methods=args.methods,
+                methods=filtered_methods,
                 root_dir=str(root_dir),
                 diag_samples=args.diag_samples,
                 normalize_docids=args.normalize_docids,

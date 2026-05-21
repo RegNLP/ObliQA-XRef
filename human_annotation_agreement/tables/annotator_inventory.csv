@@ -1,0 +1,6 @@
+annotator,file,rows,Q1_question_understandability_completed,Q2_question_fluency_reuse_completed,Q3_evidence_dependency_completed
+human_aniruh,human_annotation_agreement/judger_results/human_aniruh.csv,100,100,100,100
+human_nfonsam,human_annotation_agreement/judger_results/human_nfonsam.csv,100,100,100,100
+llm_gemini-2.5-pro,human_annotation_agreement/judger_results/llm_gemini-2.5-pro.csv,100,100,100,100
+llm_gpt-4.1-mini,human_annotation_agreement/judger_results/llm_gpt-4.1-mini.csv,100,100,100,100
+llm_gpt-5.1,human_annotation_agreement/judger_results/llm_gpt-5.1.csv,100,100,100,100

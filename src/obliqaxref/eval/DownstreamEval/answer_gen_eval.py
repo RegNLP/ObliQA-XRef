@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,8 @@ from obliqaxref.eval.DownstreamEval import answer_eval as _answer_eval
 from obliqaxref.generate.dpel.generate import DPELGenConfig, call_json
 
 logger = logging.getLogger("obliqaxref.answer_gen_eval")
+
+PROMPT_VERSION = "xref_answer_gen_v1"
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -121,6 +124,10 @@ def load_passage_lookup(corpus: str) -> dict[str, dict[str, Any]]:
             if key:
                 lookup[key] = obj
     return lookup
+
+
+def passage_text(obj: dict[str, Any]) -> str:
+    return str(obj.get("passage") or obj.get("text") or "")
 
 
 def build_prompt(question: str, passages: list[tuple[str, str]], no_citations: bool) -> str:
@@ -218,6 +225,10 @@ def run_for_corpus(
 
     client, _ = build_client(provider="azure")
     cfg = DPELGenConfig(model=model)
+    run_date = datetime.now(timezone.utc).isoformat()
+    provider = "azure"
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "")
+    dataset_name = f"ObliQA-XRef-{corpus.upper()}"
 
     for sub, items in all_items.items():
         qids = [it["item_id"] for it in items]
@@ -247,19 +258,27 @@ def run_for_corpus(
 
                 # Build passages list from retrieved top-k; fall back to gold pair as generic passages if needed
                 passages_list: list[tuple[str, str]] = []
+                retrieved_passages: list[dict[str, str]] = []
                 topk = docids[:k]
                 if use_retrieved and topk and lookup:
                     for pid in topk:
                         obj = lookup.get(pid, {})
-                        ptxt = obj.get("passage") or obj.get("text")
+                        ptxt = passage_text(obj)
                         if ptxt:
                             passages_list.append((pid, ptxt))
+                            retrieved_passages.append({"passage_id": pid, "text": ptxt})
                 # Fallback: use gold pair as generic passages (no role disclosure)
                 if not passages_list:
                     if src_text:
                         passages_list.append((src_id or "SRC", src_text))
+                        retrieved_passages.append(
+                            {"passage_id": src_id or "SRC", "text": str(src_text)}
+                        )
                     if tgt_text:
                         passages_list.append((tgt_id or "TGT", tgt_text))
+                        retrieved_passages.append(
+                            {"passage_id": tgt_id or "TGT", "text": str(tgt_text)}
+                        )
 
                 prompt = build_prompt(question, passages_list, cfg.no_citations)
                 try:
@@ -285,10 +304,22 @@ def run_for_corpus(
 
                 out[qid] = {
                     "item_id": qid,
+                    "dataset": dataset_name,
+                    "split": "test",
                     "question": question,
                     "gold_answer": gold_answer,
                     "generated_answer": gen,
                     "retrieved_docids": docids[:k],
+                    "retrieved_passages": retrieved_passages,
+                    "retrieval_method": meth,
+                    "method": it.get("method") or sub,
+                    "generation_method": it.get("generation_method") or it.get("method") or sub,
+                    "sampling_regime": it.get("sampling_regime") or "",
+                    "actual_model_or_deployment": cfg.model,
+                    "provider": provider,
+                    "api_version": api_version,
+                    "run_date": run_date,
+                    "prompt_version": PROMPT_VERSION,
                 }
 
                 processed += 1

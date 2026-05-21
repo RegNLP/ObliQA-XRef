@@ -2,7 +2,7 @@
 """
 llm_test.py — ObliQA-XRef Azure-only LLM connectivity test
 
-Reads settings from .env (located next to this file) and runs:
+Reads settings from the current shell environment or project-root .env and runs:
   1) Azure OpenAI HTTP check (deployments route)
   2) AzureOpenAI SDK check
 
@@ -29,17 +29,18 @@ except Exception:
 
 
 # ----------------------------
-# .env loading (forced)
+# .env loading (optional)
 # ----------------------------
 def load_env() -> None:
-    env_path = Path(__file__).with_name(".env")
     if load_dotenv is None:
         print("ERROR: python-dotenv not installed. Run: pip install python-dotenv")
         sys.exit(1)
-    if not env_path.exists():
-        print(f"ERROR: .env not found next to llm_test.py: {env_path}")
-        sys.exit(1)
-    load_dotenv(dotenv_path=env_path, override=True)
+    project_env = Path(__file__).resolve().parents[1] / ".env"
+    script_env = Path(__file__).with_name(".env")
+    if project_env.exists():
+        load_dotenv(dotenv_path=project_env, override=False)
+    elif script_env.exists():
+        load_dotenv(dotenv_path=script_env, override=False)
 
 
 def require_env(name: str) -> str:

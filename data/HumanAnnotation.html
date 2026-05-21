@@ -62,10 +62,10 @@
             border-color: #3a54a0;
         }
 
-        /* Wider annotation question panel */
+        /* Split passages and annotation form evenly */
         .app {
             display: grid;
-            grid-template-columns: 3fr 2fr;
+            grid-template-columns: 1fr 1fr;
             min-height: calc(100vh - 56px);
         }
 
@@ -322,49 +322,38 @@
             <div class="qa">
                 <section class="block">
                     <fieldset class="qgroup">
-                        <legend>1) Question understandability</legend>
-                        <div class="small" style="margin-bottom:6px">Is the question understandable?</div>
-                        <label class="opt"><input type="radio" name="q_understandable" value="yes"> Yes</label>
-                        <label class="opt"><input type="radio" name="q_understandable" value="no"> No</label>
-                        <label class="opt"><input type="radio" name="q_understandable" value="partial_unclear"> Partially / unclear</label>
+                        <legend>1) Question validity and clarity</legend>
+                        <div class="small" style="margin-bottom:6px">Q1. Is the question understandable?</div>
+                        <label class="opt"><input type="radio" name="question_validity_clarity" value="yes"> Yes</label>
+                        <label class="opt"><input type="radio" name="question_validity_clarity" value="partial_unclear"> Partially / unclear</label>
+                        <label class="opt"><input type="radio" name="question_validity_clarity" value="no"> No</label>
                     </fieldset>
                 </section>
 
                 <section class="block">
                     <fieldset class="qgroup">
-                        <legend>2) Question phrasing / passage reuse</legend>
-                        <div class="small" style="margin-bottom:6px">To what extent does the question reuse wording from the provided passages?</div>
-                        <label class="opt"><input type="radio" name="question_phrasing_reuse" value="low_reuse"> Low reuse — the question is mostly rephrased and reads naturally.</label>
-                        <label class="opt"><input type="radio" name="question_phrasing_reuse" value="moderate_reuse"> Moderate reuse — some key terms or phrases are reused, but the question is still naturally phrased.</label>
-                        <label class="opt"><input type="radio" name="question_phrasing_reuse" value="high_reuse"> High reuse — large parts of the question closely follow the wording of the passages.</label>
-                        <label class="opt"><input type="radio" name="question_phrasing_reuse" value="unclear"> Unclear</label>
+                        <legend>2) Question fluency and naturalness</legend>
+                        <div class="small" style="margin-bottom:6px">Q2. Is the question natural, or does it rely too heavily on copied passage wording?</div>
+                        <label class="opt"><input type="radio" name="question_fluency_naturalness" value="mostly_natural_rephrased"> Mostly natural / rephrased</label>
+                        <label class="opt"><input type="radio" name="question_fluency_naturalness" value="some_copied_acceptable"> Some copied wording, but still acceptable</label>
+                        <label class="opt"><input type="radio" name="question_fluency_naturalness" value="too_much_copied_unnatural"> Too much copied wording / unnatural</label>
+                        <label class="opt"><input type="radio" name="question_fluency_naturalness" value="unclear"> Unclear</label>
                     </fieldset>
                 </section>
 
                 <section class="block">
                     <fieldset class="qgroup">
-                        <legend>3) Cross-reference connection type</legend>
-                        <div class="small" style="margin-bottom:6px">What is the nature of the cross-reference connection from the source passage to the target passage?</div>
-                        <label class="opt"><input type="radio" name="cross_reference_connection_type" value="strict_explicit"> Strictly explicit — the source directly refers to the exact target rule/passage ID.</label>
-                        <label class="opt"><input type="radio" name="cross_reference_connection_type" value="range_based_explicit"> Range-based explicit — the source refers to a rule range, section, chapter, or group that includes the target.</label>
-                        <label class="opt"><input type="radio" name="cross_reference_connection_type" value="implicit_semantic"> Implicit / semantic — no explicit rule number/range is given, but the passages are conceptually connected.</label>
-                        <label class="opt"><input type="radio" name="cross_reference_connection_type" value="no_relation"> No relation — no clear connection between the passages.</label>
+                        <legend>3) Source-target evidence dependency</legend>
+                        <div class="small" style="margin-bottom:6px">Q3. Which passage(s) are needed to answer the question?</div>
+                        <label class="opt"><input type="radio" name="source_target_evidence_dependency" value="both_needed"> Both source and target are needed</label>
+                        <label class="opt"><input type="radio" name="source_target_evidence_dependency" value="source_only_sufficient"> Only source is sufficient</label>
+                        <label class="opt"><input type="radio" name="source_target_evidence_dependency" value="target_only_sufficient"> Only target is sufficient</label>
+                        <label class="opt"><input type="radio" name="source_target_evidence_dependency" value="neither_mismatch_unclear"> Neither / mismatch / unclear</label>
                     </fieldset>
                 </section>
 
                 <section class="block">
-                    <fieldset class="qgroup">
-                        <legend>4) Coverage / evidence dependency</legend>
-                        <div class="small" style="margin-bottom:6px">Based only on the provided text, which passage(s) appear to provide the evidence needed for the question?</div>
-                        <label class="opt"><input type="radio" name="evidence_dependency" value="both_needed"> Both source and target provide necessary evidence</label>
-                        <label class="opt"><input type="radio" name="evidence_dependency" value="source_sufficient"> Only the source provides sufficient evidence</label>
-                        <label class="opt"><input type="radio" name="evidence_dependency" value="target_sufficient"> Only the target provides sufficient evidence</label>
-                        <label class="opt"><input type="radio" name="evidence_dependency" value="insufficient_mismatch_unclear"> The provided passages do not clearly provide sufficient evidence / mismatch / unclear</label>
-                    </fieldset>
-                </section>
-
-                <section class="block">
-                    <div class="small" style="margin-bottom:6px"><strong>5) Optional comment</strong></div>
+                    <div class="small" style="margin-bottom:6px"><strong>Optional comment</strong></div>
                     <textarea id="comment" placeholder="Optional short note"></textarea>
                 </section>
 
@@ -391,38 +380,33 @@
                     items, an ID or a short “Reference Text” may appear near a passage; treat these as hints only—decide
                     based on the passages.</p>
 
-                <h3>1) Question understandability</h3>
+                <h3>1) Question validity and clarity</h3>
+                <p>Q1. Is the question understandable?</p>
                 <ul>
-                    <li><strong>Yes</strong>: the question is clear and understandable.</li>
-                    <li><strong>No</strong>: wording is unclear, ambiguous, or ungrammatical.</li>
-                    <li><strong>Partially / unclear</strong>: the question is only partly understandable or requires guessing.</li>
+                    <li><strong>Yes</strong></li>
+                    <li><strong>Partially / unclear</strong></li>
+                    <li><strong>No</strong></li>
                 </ul>
 
-                <h3>2) Question phrasing / passage reuse</h3>
+                <h3>2) Question fluency and naturalness</h3>
+                <p>Q2. Is the question natural, or does it rely too heavily on copied passage wording?</p>
                 <ul>
-                    <li><strong>Low reuse</strong>: the question is mostly rephrased and reads naturally.</li>
-                    <li><strong>Moderate reuse</strong>: some key terms or phrases are reused, but the question is still naturally phrased.</li>
-                    <li><strong>High reuse</strong>: large parts of the question closely follow the wording of the passages.</li>
-                    <li><strong>Unclear</strong>: reuse level cannot be determined confidently.</li>
+                    <li><strong>Mostly natural / rephrased</strong></li>
+                    <li><strong>Some copied wording, but still acceptable</strong></li>
+                    <li><strong>Too much copied wording / unnatural</strong></li>
+                    <li><strong>Unclear</strong></li>
                 </ul>
 
-                <h3>3) Cross-reference connection type</h3>
+                <h3>3) Source-target evidence dependency</h3>
+                <p>Q3. Which passage(s) are needed to answer the question?</p>
                 <ul>
-                    <li><strong>Strictly explicit</strong>: the source directly refers to the exact target rule/passage ID.</li>
-                    <li><strong>Range-based explicit</strong>: the source refers to a rule range, section, chapter, or group that includes the target.</li>
-                    <li><strong>Implicit / semantic</strong>: no explicit rule number/range is given, but the passages are conceptually connected.</li>
-                    <li><strong>No relation</strong>: no clear connection between the passages.</li>
+                    <li><strong>Both source and target are needed</strong></li>
+                    <li><strong>Only source is sufficient</strong></li>
+                    <li><strong>Only target is sufficient</strong></li>
+                    <li><strong>Neither / mismatch / unclear</strong></li>
                 </ul>
 
-                <h3>4) Coverage / evidence dependency</h3>
-                <ul>
-                    <li><strong>Both source and target provide necessary evidence</strong>: both passages appear needed.</li>
-                    <li><strong>Only the source provides sufficient evidence</strong>: the Source passage appears sufficient.</li>
-                    <li><strong>Only the target provides sufficient evidence</strong>: the Target passage appears sufficient.</li>
-                    <li><strong>The provided passages do not clearly provide sufficient evidence / mismatch / unclear</strong>: evidence is incomplete, mismatched, or unclear.</li>
-                </ul>
-
-                <h3>5) Optional comment</h3>
+                <h3>Optional comment</h3>
                 <p>Add a short note only if useful.</p>
 
                 <p class="small"><strong>Rules:</strong> Do not use outside knowledge. Use Save to download progress.</p>
@@ -481,10 +465,9 @@
 
         // Annotation columns (written back into CSV)
         const ANN_COLS = [
-            "q_understandable",                 // yes/no/partial_unclear
-            "question_phrasing_reuse",          // low_reuse/moderate_reuse/high_reuse/unclear
-            "cross_reference_connection_type",  // strict_explicit/range_based_explicit/implicit_semantic/no_relation
-            "evidence_dependency",              // both_needed/source_sufficient/target_sufficient/insufficient_mismatch_unclear
+            "question_validity_clarity",        // yes/partial_unclear/no
+            "question_fluency_naturalness",     // mostly_natural_rephrased/some_copied_acceptable/too_much_copied_unnatural/unclear
+            "source_target_evidence_dependency",// both_needed/source_only_sufficient/target_only_sufficient/neither_mismatch_unclear
             "comment"                           // free text
         ];
 
@@ -569,38 +552,71 @@
             const hasLegacyQ = 'q_quality' in col;
             const hasLegacyDual = 'dual_use' in col;
             const hasLegacyRelevance = 'passage_relevance' in col;
-            const hasLegacyExplicit = 'explicit_citation' in col;
 
             for (let r = 1; r < table.length; r++) {
-                // 1) q_understandable from q_quality
-                const curUnderstandable = get(r, 'q_understandable');
-                if (!curUnderstandable && hasLegacyQ) {
+                // 1) question_validity_clarity from previous clarity fields
+                const curClarity = get(r, 'question_validity_clarity');
+                const oldUnderstandable = (get(r, 'q_understandable') || '').trim().toLowerCase();
+                const oldComplexity = (get(r, 'question_complexity') || '').trim().toLowerCase();
+                if (!curClarity && oldUnderstandable) {
+                    const mapped = {
+                        yes: 'yes',
+                        partial_unclear: 'partial_unclear',
+                        no: 'no'
+                    }[oldUnderstandable];
+                    if (mapped) set(r, 'question_validity_clarity', mapped);
+                } else if (!curClarity && oldComplexity) {
+                    const mapped = (oldComplexity === 'unclear') ? 'no' : 'yes';
+                    set(r, 'question_validity_clarity', mapped);
+                } else if (!curClarity && hasLegacyQ) {
                     const v = (get(r, 'q_quality') || '').trim().toLowerCase();
-                    if (v) {
-                        const mapped = (v === 'yes') ? 'yes' : 'no';
-                        set(r, 'q_understandable', mapped);
-                    }
+                    if (v) set(r, 'question_validity_clarity', v === 'yes' ? 'yes' : 'no');
                 }
 
-                // 2) evidence_dependency from legacy dual_use or passage_relevance
-                const curDep = get(r, 'evidence_dependency');
-                if (!curDep && (hasLegacyDual || hasLegacyRelevance)) {
+                // 2) question_fluency_naturalness from previous phrasing/reuse field
+                const curFluency = get(r, 'question_fluency_naturalness');
+                const oldReuse = (get(r, 'question_phrasing_reuse') || '').trim().toLowerCase();
+                if (!curFluency && oldReuse) {
+                    const mapped = {
+                        low_reuse: 'mostly_natural_rephrased',
+                        moderate_reuse: 'some_copied_acceptable',
+                        high_reuse: 'too_much_copied_unnatural',
+                        unclear: 'unclear'
+                    }[oldReuse];
+                    if (mapped) set(r, 'question_fluency_naturalness', mapped);
+                }
+
+                // 3) source_target_evidence_dependency from previous dependency fields
+                const curDep = get(r, 'source_target_evidence_dependency');
+                const oldStrength = (get(r, 'evidence_dependency_strength') || '').trim().toLowerCase();
+                const oldDep = (get(r, 'evidence_dependency') || '').trim().toLowerCase();
+                if (!curDep && oldStrength) {
+                    const mapped = {
+                        strong_two_passage: 'both_needed',
+                        moderate_two_passage: 'both_needed',
+                        weak_two_passage: 'both_needed',
+                        source_only_sufficient: 'source_only_sufficient',
+                        target_only_sufficient: 'target_only_sufficient',
+                        insufficient_mismatch_unclear: 'neither_mismatch_unclear'
+                    }[oldStrength];
+                    if (mapped) set(r, 'source_target_evidence_dependency', mapped);
+                } else if (!curDep && oldDep) {
+                    const mapped = {
+                        both_needed: 'both_needed',
+                        source_sufficient: 'source_only_sufficient',
+                        target_sufficient: 'target_only_sufficient',
+                        insufficient_mismatch_unclear: 'neither_mismatch_unclear'
+                    }[oldDep];
+                    if (mapped) set(r, 'source_target_evidence_dependency', mapped);
+                } else if (!curDep && (hasLegacyDual || hasLegacyRelevance)) {
                     const v = (get(r, 'dual_use') || '').trim().toLowerCase();
                     const rel = (get(r, 'passage_relevance') || '').trim().toLowerCase();
                     let mapped = '';
                     if (v === 'both' || rel === 'both') mapped = 'both_needed';
-                    else if (v === 's_only' || rel === 's_only') mapped = 'source_sufficient';
-                    else if (v === 't_only' || rel === 't_only') mapped = 'target_sufficient';
-                    else if (v === 'neither_unclear' || rel === 'neither_mismatch' || rel === 'unclear') mapped = 'insufficient_mismatch_unclear';
-                    if (mapped) set(r, 'evidence_dependency', mapped);
-                }
-
-                // 3) cross_reference_connection_type from legacy explicit_citation
-                const curXref = get(r, 'cross_reference_connection_type');
-                if (!curXref && hasLegacyExplicit) {
-                    const v = (get(r, 'explicit_citation') || '').trim().toLowerCase();
-                    if (v === 'yes') set(r, 'cross_reference_connection_type', 'strict_explicit');
-                    else if (v === 'no') set(r, 'cross_reference_connection_type', 'no_relation');
+                    else if (v === 's_only' || rel === 's_only') mapped = 'source_only_sufficient';
+                    else if (v === 't_only' || rel === 't_only') mapped = 'target_only_sufficient';
+                    else if (v === 'neither_unclear' || rel === 'neither_mismatch' || rel === 'unclear') mapped = 'neither_mismatch_unclear';
+                    if (mapped) set(r, 'source_target_evidence_dependency', mapped);
                 }
             }
         }
@@ -625,10 +641,9 @@
 
         function isLabeledRow(r) {
             return !!(
-                get(r, "q_understandable") &&
-                get(r, "question_phrasing_reuse") &&
-                get(r, "cross_reference_connection_type") &&
-                get(r, "evidence_dependency")
+                get(r, "question_validity_clarity") &&
+                get(r, "question_fluency_naturalness") &&
+                get(r, "source_target_evidence_dependency")
             );
         }
 
@@ -710,10 +725,9 @@
 
             updateStatus();
 
-            setRadio('q_understandable', get(idx, "q_understandable"));
-            setRadio('question_phrasing_reuse', get(idx, "question_phrasing_reuse"));
-            setRadio('cross_reference_connection_type', get(idx, "cross_reference_connection_type"));
-            setRadio('evidence_dependency', get(idx, "evidence_dependency"));
+            setRadio('question_validity_clarity', get(idx, "question_validity_clarity"));
+            setRadio('question_fluency_naturalness', get(idx, "question_fluency_naturalness"));
+            setRadio('source_target_evidence_dependency', get(idx, "source_target_evidence_dependency"));
             els.comment.value = get(idx, "comment");
 
             els.prev.disabled = els.prev2.disabled = (idx === 1);
@@ -722,10 +736,9 @@
 
         function collectAndSave() {
             if (table.length <= 1) return;
-            set(idx, "q_understandable", getRadio('q_understandable'));
-            set(idx, "question_phrasing_reuse", getRadio('question_phrasing_reuse'));
-            set(idx, "cross_reference_connection_type", getRadio('cross_reference_connection_type'));
-            set(idx, "evidence_dependency", getRadio('evidence_dependency'));
+            set(idx, "question_validity_clarity", getRadio('question_validity_clarity'));
+            set(idx, "question_fluency_naturalness", getRadio('question_fluency_naturalness'));
+            set(idx, "source_target_evidence_dependency", getRadio('source_target_evidence_dependency'));
             set(idx, "comment", els.comment.value.trim());
 
             const csvText = csvStringify(table);
@@ -805,7 +818,7 @@
         document.getElementById('next2').addEventListener('click', () => { collectAndSave(); show(idx + 1); });
 
         // Live save
-        for (const n of ['q_understandable', 'question_phrasing_reuse', 'cross_reference_connection_type', 'evidence_dependency']) {
+        for (const n of ['question_validity_clarity', 'question_fluency_naturalness', 'source_target_evidence_dependency']) {
             document.querySelectorAll(`input[name="${n}"]`).forEach(el => el.addEventListener('change', collectAndSave));
         }
         document.getElementById('comment').addEventListener('change', collectAndSave);
